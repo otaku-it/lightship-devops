@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: lightship-devops-api
+Version: 0.1.0
+Summary: Lightship lightweight DevOps release platform API
+Requires-Python: >=3.11
+Requires-Dist: fastapi==0.115.12
+Requires-Dist: uvicorn[standard]==0.34.2
+Requires-Dist: sqlalchemy==2.0.41
+Requires-Dist: pymysql==1.1.1
+Requires-Dist: pydantic-settings==2.9.1
+Requires-Dist: python-jose[cryptography]==3.4.0
+Requires-Dist: bcrypt==4.3.0
+Requires-Dist: paramiko==3.5.1
+Requires-Dist: httpx==0.28.1
+Provides-Extra: dev
+Requires-Dist: pytest==8.3.5; extra == "dev"
+Requires-Dist: pytest-cov==6.1.1; extra == "dev"

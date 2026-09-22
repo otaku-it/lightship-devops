@@ -1,0 +1,45 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: lightship
+      MYSQL_USER: lightship
+      MYSQL_PASSWORD: lightship
+      MYSQL_ROOT_PASSWORD: root-lightship
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot-lightship"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: mysql+pymysql://lightship:lightship@mysql:3306/lightship?charset=utf8mb4
+      SECRET_KEY: local-development-secret-change-before-production
+      INITIAL_ADMIN_USERNAME: admin
+      INITIAL_ADMIN_PASSWORD: change-me-now
+      CORS_ORIGINS: http://localhost:5173,http://localhost:8088
+      EXECUTOR_MODE: real
+      CREDENTIAL_ENCRYPTION_KEY: local-credential-key-change-before-production
+      BUILD_TIMEOUT_SECONDS: 900
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8088:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:

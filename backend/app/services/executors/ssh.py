@@ -1,0 +1,453 @@
+import base64
+import hashlib
+import io
+import posixpath
+import re
+import shlex
+import time
+from pathlib import Path
+
+import paramiko
+
+from app.core.config import settings
+from app.models.environment import DeploymentTarget
+from app.services.executors.base import ConnectionResult, DeploymentResult
+
+
+def fingerprint(key: paramiko.PKey) -> str:
+    digest = hashlib.sha256(key.asbytes()).digest()
+    return "SHA256:" + base64.b64encode(digest).decode().rstrip("=")
+
+
+class FingerprintPolicy(paramiko.MissingHostKeyPolicy):
+    def __init__(self, expected: str, trust_on_first_use: bool):
+        self.expected = expected.strip()
+        self.trust_on_first_use = trust_on_first_use
+        self.observed = ""
+
+    def missing_host_key(self, client, hostname, key):  # noqa: ANN001
+        self.observed = fingerprint(key)
+        if self.expected and self.observed != self.expected:
+            raise paramiko.SSHException(
+                f"服务器指纹不匹配，期望 {self.expected}，实际 {self.observed}"
+            )
+        if not self.expected and not self.trust_on_first_use:
+            raise paramiko.SSHException(
+                f"服务器指纹尚未信任：{self.observed}，请核对后保存"
+            )
+        client.get_host_keys().add(hostname, key.get_name(), key)
+
+
+def load_private_key(value: str, passphrase: str | None) -> paramiko.PKey:
+    errors: list[Exception] = []
+    for key_class in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey):
+        try:
+            return key_class.from_private_key(io.StringIO(value), password=passphrase or None)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+    raise ValueError("无法识别 SSH 私钥或私钥口令不正确") from errors[-1]
+
+
+def render_template(value: str, variables: dict[str, str | int]) -> str:
+    try:
+        rendered = value.format_map(variables)
+    except KeyError as exc:
+        raise ValueError(f"命令模板包含未知变量：{exc.args[0]}") from exc
+    if "\n" in rendered or "\x00" in rendered:
+        raise ValueError("部署路径和命令不能包含换行或空字符")
+    return rendered
+
+
+class SSHExecutor:
+    def _connect(
+        self,
+        target: DeploymentTarget,
+        *,
+        private_key: str | None,
+        password: str | None,
+        passphrase: str | None,
+        expected_fingerprint: str,
+        trust_on_first_use: bool,
+    ) -> tuple[paramiko.SSHClient, str]:
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
+        policy = FingerprintPolicy(expected_fingerprint, trust_on_first_use)
+        client.set_missing_host_key_policy(policy)
+        key = load_private_key(private_key, passphrase) if private_key else None
+        client.connect(
+            hostname=target.address,
+            port=target.port,
+            username=target.username,
+            pkey=key,
+            password=password or None,
+            timeout=10,
+            banner_timeout=10,
+            auth_timeout=10,
+            look_for_keys=False,
+            allow_agent=False,
+        )
+        server_key = client.get_transport().get_remote_server_key()
+        observed = policy.observed or fingerprint(server_key)
+        if expected_fingerprint and observed != expected_fingerprint:
+            client.close()
+            raise paramiko.SSHException(
+                f"服务器指纹不匹配，期望 {expected_fingerprint}，实际 {observed}"
+            )
+        return client, observed
+
+    @staticmethod
+    def _run(
+        client: paramiko.SSHClient, command: str, timeout: int | None = None
+    ) -> tuple[int, str, str]:
+        _, stdout, stderr = client.exec_command(
+            command, timeout=timeout or settings.ssh_command_timeout_seconds
+        )
+        exit_code = stdout.channel.recv_exit_status()
+        return (
+            exit_code,
+            stdout.read().decode(errors="replace").strip(),
+            stderr.read().decode(errors="replace").strip(),
+        )
+
+    def test_connection(
+        self,
+        target: DeploymentTarget,
+        *,
+        private_key: str | None = None,
+        password: str | None = None,
+        passphrase: str | None = None,
+        expected_fingerprint: str = "",
+        trust_on_first_use: bool = False,
+    ) -> ConnectionResult:
+        client = None
+        started = time.perf_counter()
+        observed = ""
+        try:
+            client, observed = self._connect(
+                target,
+                private_key=private_key,
+                password=password,
+                passphrase=passphrase,
+                expected_fingerprint=expected_fingerprint,
+                trust_on_first_use=trust_on_first_use,
+            )
+            code, output, error = self._run(
+                client, "uname -srm && . /etc/os-release && printf '%s %s' \"$NAME\" \"$VERSION_ID\""
+            )
+            if code != 0:
+                raise RuntimeError(error or "系统信息读取失败")
+            message = "SSH 认证、服务器指纹与只读系统检查通过"
+            if target.project and target.project.deployment_mode == "docker":
+                docker_code, docker_output, docker_error = self._run(
+                    client,
+                    "docker version --format 'Docker {{.Server.Version}}' && docker info --format '{{.OSType}}/{{.Architecture}}'",
+                )
+                if docker_code != 0:
+                    raise RuntimeError(
+                        "Docker 不可用或当前 SSH 用户无 Docker 权限："
+                        f"{docker_error or docker_output}"
+                    )
+                output = f"{output} · {docker_output.replace(chr(10), ' ')}"
+                message = "SSH 与 Docker Engine 检查通过，可执行容器部署"
+            return ConnectionResult(
+                success=True,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                message=message,
+                system_info=output,
+                host_key_fingerprint=observed,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return ConnectionResult(
+                success=False,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                message=f"SSH 连接失败：{exc}",
+                host_key_fingerprint=observed,
+            )
+        finally:
+            if client:
+                client.close()
+
+    def deploy_docker(
+        self,
+        target: DeploymentTarget,
+        *,
+        archive_path: Path,
+        project_name: str,
+        version: str,
+        release_no: str,
+        service_port: int,
+        dockerfile_path: str,
+        docker_image_name: str,
+        docker_container_port: int,
+        docker_run_args: str,
+        health_check_command: str,
+        private_key: str,
+        password: str,
+        passphrase: str,
+        expected_fingerprint: str,
+        trust_on_first_use: bool,
+    ) -> DeploymentResult:
+        client = None
+        logs: list[str] = []
+        safe_project = re.sub(r"[^a-zA-Z0-9_.-]+", "-", project_name).strip("-.").lower()
+        safe_version = re.sub(r"[^a-zA-Z0-9_.-]+", "-", version).strip("-.").lower()
+        if not safe_project or not safe_version:
+            raise ValueError("项目名或版本号无法转换为合法 Docker 名称")
+        image_base = docker_image_name.strip() or f"lightship/{safe_project}"
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_./:-]*", image_base):
+            raise ValueError("Docker 镜像名称格式不合法")
+        if ":" in image_base.rsplit("/", 1)[-1]:
+            raise ValueError("Docker 镜像名称请勿包含标签，平台会自动生成版本标签")
+        image_ref = f"{image_base}:{safe_version}-{release_no.lower()}"
+        container_name = f"lightship-{safe_project}-{target.id}"
+        context_dir = f"/tmp/lightship-docker-{release_no.lower()}"
+        remote_archive = f"{context_dir}.tar.gz"
+        dockerfile = dockerfile_path.strip().replace("\\", "/") or "Dockerfile"
+        if dockerfile.startswith("/") or ".." in dockerfile.split("/"):
+            raise ValueError("Dockerfile 路径必须是仓库内的相对路径")
+        try:
+            extra_args = " ".join(shlex.quote(item) for item in shlex.split(docker_run_args))
+        except ValueError as exc:
+            raise ValueError(f"Docker 运行参数格式错误：{exc}") from exc
+        port_args = (
+            f"-p {int(service_port)}:{int(docker_container_port)}"
+            if service_port and docker_container_port
+            else ""
+        )
+        run_options = " ".join(item for item in ["--restart unless-stopped", port_args, extra_args] if item)
+        previous_image = ""
+        switched = False
+        variables: dict[str, str | int] = {
+            "project": project_name,
+            "version": version,
+            "release_no": release_no,
+            "service_port": service_port,
+            "port": service_port,
+            "container_port": docker_container_port,
+            "container_name": container_name,
+            "image": image_ref,
+        }
+        health_command = render_template(health_check_command, variables)
+        try:
+            client, _ = self._connect(
+                target,
+                private_key=private_key,
+                password=password,
+                passphrase=passphrase,
+                expected_fingerprint=expected_fingerprint,
+                trust_on_first_use=trust_on_first_use,
+            )
+            logs.append("SSH 会话已建立，开始 Docker 部署")
+            code, output, error = self._run(client, "docker info --format '{{.ServerVersion}}'")
+            if code != 0:
+                raise RuntimeError(f"Docker Engine 不可用：{error or output}")
+            logs.append(f"Docker Engine {output.strip()} 可用")
+            with client.open_sftp() as sftp:
+                sftp.put(str(archive_path), remote_archive)
+            prepare = (
+                f"rm -rf {shlex.quote(context_dir)} && mkdir -p {shlex.quote(context_dir)} && "
+                f"tar -xzf {shlex.quote(remote_archive)} -C {shlex.quote(context_dir)}"
+            )
+            code, output, error = self._run(client, prepare)
+            if code != 0:
+                raise RuntimeError(f"解压 Docker 构建上下文失败：{error or output}")
+            logs.append("Docker 构建上下文已上传并解压")
+            raw_build_command = (
+                f"docker build -f {shlex.quote(posixpath.join(context_dir, dockerfile))} "
+                f"-t {shlex.quote(image_ref)} {shlex.quote(context_dir)}"
+            )
+            build_log = f"/tmp/lightship-docker-build-{release_no.lower()}.log"
+            build_command = (
+                f"{raw_build_command} > {shlex.quote(build_log)} 2>&1; "
+                f"code=$?; tail -n 80 {shlex.quote(build_log)}; rm -f {shlex.quote(build_log)}; exit $code"
+            )
+            code, output, error = self._run(
+                client, build_command, timeout=settings.build_timeout_seconds
+            )
+            build_tail = (output or error)[-3000:].strip()
+            if build_tail:
+                logs.append(build_tail)
+            if code != 0:
+                raise RuntimeError(f"Docker 镜像构建失败：{error or output}")
+            logs.append(f"镜像构建完成：{image_ref}")
+            _, output, _ = self._run(
+                client,
+                f"docker inspect -f '{{{{.Config.Image}}}}' {shlex.quote(container_name)} 2>/dev/null || true",
+            )
+            previous_image = output.strip()
+            replace_command = (
+                f"docker rm -f {shlex.quote(container_name)} >/dev/null 2>&1 || true; "
+                f"docker run -d --name {shlex.quote(container_name)} {run_options} {shlex.quote(image_ref)}"
+            )
+            switched = True
+            code, output, error = self._run(client, replace_command)
+            if code != 0:
+                raise RuntimeError(f"启动 Docker 容器失败：{error or output}")
+            logs.append(f"容器 {container_name} 已切换到新镜像")
+            if health_command:
+                retry_health = (
+                    f"for i in 1 2 3 4 5 6 7 8 9 10; do ({health_command}) && exit 0; "
+                    "sleep 2; done; exit 1"
+                )
+                code, output, error = self._run(client, retry_health, timeout=60)
+                if output:
+                    logs.append(output[-2000:])
+                if code != 0:
+                    raise RuntimeError(f"健康检查失败：{error or output}")
+                logs.append("容器健康检查通过")
+            return DeploymentResult(
+                success=True,
+                message="Docker 镜像构建完成，容器已更新且服务健康",
+                deployed_path=image_ref,
+                previous_path=previous_image,
+                logs=tuple(logs),
+            )
+        except Exception as exc:  # noqa: BLE001
+            if client and switched:
+                self._run(
+                    client,
+                    f"docker rm -f {shlex.quote(container_name)} >/dev/null 2>&1 || true",
+                )
+                if previous_image:
+                    rollback = (
+                        f"docker run -d --name {shlex.quote(container_name)} {run_options} {shlex.quote(previous_image)}"
+                    )
+                    self._run(client, rollback)
+                    logs.append(f"已回滚容器到上一镜像 {previous_image}")
+                else:
+                    logs.append("新容器已移除；此前没有可回滚的旧容器")
+            return DeploymentResult(
+                success=False,
+                message=str(exc),
+                deployed_path=image_ref,
+                previous_path=previous_image,
+                logs=tuple(logs),
+            )
+        finally:
+            if client:
+                try:
+                    self._run(
+                        client,
+                        f"rm -rf {shlex.quote(context_dir)} {shlex.quote(remote_archive)}",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                client.close()
+
+    def deploy(
+        self,
+        target: DeploymentTarget,
+        *,
+        archive_path: Path,
+        project_name: str,
+        version: str,
+        release_no: str,
+        service_port: int,
+        private_key: str,
+        password: str,
+        passphrase: str,
+        expected_fingerprint: str,
+        trust_on_first_use: bool,
+    ) -> DeploymentResult:
+        client = None
+        logs: list[str] = []
+        variables: dict[str, str | int] = {
+            "project": project_name,
+            "version": version,
+            "release_no": release_no,
+            "service_port": service_port,
+            "port": service_port,
+        }
+        deploy_path = render_template(target.deploy_path, variables)
+        if not deploy_path.startswith("/"):
+            raise ValueError("版本部署目录必须是绝对路径")
+        app_root = posixpath.dirname(posixpath.dirname(deploy_path.rstrip("/")))
+        current_path = posixpath.join(app_root, "current")
+        variables.update({"deploy_path": deploy_path, "current_path": current_path})
+        start_command = render_template(target.start_command, variables)
+        health_command = render_template(target.health_check_command, variables)
+        remote_archive = f"/tmp/lightship-{release_no}.tar.gz"
+        previous_path = ""
+        switched = False
+        try:
+            client, _ = self._connect(
+                target,
+                private_key=private_key,
+                password=password,
+                passphrase=passphrase,
+                expected_fingerprint=expected_fingerprint,
+                trust_on_first_use=trust_on_first_use,
+            )
+            logs.append("SSH 会话已建立")
+            with client.open_sftp() as sftp:
+                sftp.put(str(archive_path), remote_archive)
+            logs.append(f"制品已上传至 {remote_archive}")
+
+            prepare = (
+                f"mkdir -p {shlex.quote(deploy_path)} && "
+                f"tar -xzf {shlex.quote(remote_archive)} -C {shlex.quote(deploy_path)} && "
+                f"rm -f {shlex.quote(remote_archive)}"
+            )
+            code, output, error = self._run(client, prepare)
+            if code != 0:
+                raise RuntimeError(f"解压制品失败：{error or output}")
+            logs.append(f"制品已解压至 {deploy_path}")
+
+            _, output, _ = self._run(
+                client, f"readlink -f {shlex.quote(current_path)} 2>/dev/null || true"
+            )
+            previous_path = output.strip()
+            switch = (
+                f"mkdir -p {shlex.quote(app_root)} && "
+                f"ln -sfn {shlex.quote(deploy_path)} {shlex.quote(current_path)}"
+            )
+            code, output, error = self._run(client, switch)
+            if code != 0:
+                raise RuntimeError(f"切换当前版本失败：{error or output}")
+            switched = True
+            logs.append(f"当前版本已切换到 {deploy_path}")
+
+            if start_command:
+                code, output, error = self._run(client, start_command)
+                if output:
+                    logs.append(output[-2000:])
+                if code != 0:
+                    raise RuntimeError(f"启动/重启命令失败：{error or output}")
+                logs.append("启动/重启命令执行成功")
+            if health_command:
+                code, output, error = self._run(client, health_command)
+                if output:
+                    logs.append(output[-2000:])
+                if code != 0:
+                    raise RuntimeError(f"健康检查失败：{error or output}")
+                logs.append("健康检查通过")
+            return DeploymentResult(
+                success=True,
+                message="真实部署完成，服务健康",
+                deployed_path=deploy_path,
+                previous_path=previous_path,
+                logs=tuple(logs),
+            )
+        except Exception as exc:  # noqa: BLE001
+            if client and switched and previous_path:
+                rollback = (
+                    f"ln -sfn {shlex.quote(previous_path)} {shlex.quote(current_path)}"
+                )
+                self._run(client, rollback)
+                if start_command:
+                    self._run(client, start_command)
+                logs.append(f"已回滚到 {previous_path}")
+            return DeploymentResult(
+                success=False,
+                message=str(exc),
+                deployed_path=deploy_path,
+                previous_path=previous_path,
+                logs=tuple(logs),
+            )
+        finally:
+            if client:
+                try:
+                    self._run(client, f"rm -f {shlex.quote(remote_archive)}")
+                except Exception:  # noqa: BLE001
+                    pass
+                client.close()
