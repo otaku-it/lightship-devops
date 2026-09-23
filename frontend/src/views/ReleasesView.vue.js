@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AlertTriangle, Check, Plus, RefreshCw, Rocket, Server, X } from 'lucide-vue-next';
+import { AlertTriangle, Check, Maximize2, Plus, RefreshCw, Rocket, Server, X } from 'lucide-vue-next';
 import { api } from '../api/client';
 import ModalShell from '../components/ModalShell.vue';
 import StatusTrack from '../components/StatusTrack.vue';
@@ -12,6 +12,7 @@ const targets = ref([]);
 const filter = ref('all');
 const showCreate = ref(false);
 const selected = ref(null);
+const logExpanded = ref(false);
 const saving = ref(false);
 const error = ref('');
 const route = useRoute();
@@ -88,6 +89,11 @@ function waitingMinutes(item) {
     return Math.floor(Math.max(0, Date.now() - parseApiDate(item.started_at).getTime()) / 60000);
 }
 function stepLabel(status) { return { running: '执行中', success: '已完成', failed: '失败', simulated: '仅模拟' }[status] || '等待中'; }
+function closeRelease() { logExpanded.value = false; selected.value = null; }
+function handleKeydown(event) {
+    if (event.key === 'Escape' && logExpanded.value)
+        logExpanded.value = false;
+}
 function applyRouteIntent() {
     const projectId = Number(route.query.project_id || 0);
     if (projects.value.some((item) => item.id === projectId))
@@ -97,9 +103,19 @@ function applyRouteIntent() {
 }
 watch(() => route.query, () => { if (projects.value.length)
     applyRouteIntent(); });
-onMounted(async () => { await load(); applyRouteIntent(); timer = window.setInterval(() => { if (releases.value.some((item) => ['pending', 'running'].includes(item.status)))
-    load(); }, 1500); });
-onBeforeUnmount(() => window.clearInterval(timer));
+watch(selected, (value) => { if (!value)
+    logExpanded.value = false; });
+onMounted(async () => {
+    window.addEventListener('keydown', handleKeydown);
+    await load();
+    applyRouteIntent();
+    timer = window.setInterval(() => { if (releases.value.some((item) => ['pending', 'running'].includes(item.status)))
+        load(); }, 1500);
+});
+onBeforeUnmount(() => {
+    window.clearInterval(timer);
+    window.removeEventListener('keydown', handleKeydown);
+});
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -415,11 +431,7 @@ if (__VLS_ctx.showCreate) {
 }
 if (__VLS_ctx.selected) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ onMousedown: (...[$event]) => {
-                if (!(__VLS_ctx.selected))
-                    return;
-                __VLS_ctx.selected = null;
-            } },
+        ...{ onMousedown: (__VLS_ctx.closeRelease) },
         ...{ class: "drawer-wrap" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.aside, __VLS_intrinsicElements.aside)({
@@ -443,12 +455,9 @@ if (__VLS_ctx.selected) {
     (__VLS_ctx.selected.project_name);
     (__VLS_ctx.selected.version);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.selected))
-                    return;
-                __VLS_ctx.selected = null;
-            } },
+        ...{ onClick: (__VLS_ctx.closeRelease) },
         ...{ class: "icon-button" },
+        'aria-label': "关闭发布详情",
     });
     const __VLS_34 = {}.X;
     /** @type {[typeof __VLS_components.X, ]} */ ;
@@ -549,8 +558,26 @@ if (__VLS_ctx.selected) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     (__VLS_ctx.selected.release_no);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "terminal-head-actions" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     (__VLS_ctx.lastLog(__VLS_ctx.selected) ? __VLS_ctx.parseApiDate(__VLS_ctx.lastLog(__VLS_ctx.selected).created_at).toLocaleTimeString('zh-CN') : '--');
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.selected))
+                    return;
+                __VLS_ctx.logExpanded = true;
+            } },
+        ...{ class: "terminal-expand-button" },
+        title: "放大查看日志",
+        'aria-label': "放大查看日志",
+    });
+    const __VLS_42 = {}.Maximize2;
+    /** @type {[typeof __VLS_components.Maximize2, ]} */ ;
+    // @ts-ignore
+    const __VLS_43 = __VLS_asFunctionalComponent(__VLS_42, new __VLS_42({}));
+    const __VLS_44 = __VLS_43({}, ...__VLS_functionalComponentArgsRest(__VLS_43));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "terminal-body" },
     });
@@ -573,6 +600,86 @@ if (__VLS_ctx.selected) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     }
 }
+const __VLS_46 = {}.Teleport;
+/** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
+// @ts-ignore
+const __VLS_47 = __VLS_asFunctionalComponent(__VLS_46, new __VLS_46({
+    to: "body",
+}));
+const __VLS_48 = __VLS_47({
+    to: "body",
+}, ...__VLS_functionalComponentArgsRest(__VLS_47));
+__VLS_49.slots.default;
+if (__VLS_ctx.logExpanded && __VLS_ctx.selected) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onMousedown: (...[$event]) => {
+                if (!(__VLS_ctx.logExpanded && __VLS_ctx.selected))
+                    return;
+                __VLS_ctx.logExpanded = false;
+            } },
+        ...{ class: "log-viewer-backdrop" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "log-viewer" },
+        role: "dialog",
+        'aria-modal': "true",
+        'aria-label': "发布实时日志",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
+        ...{ class: "log-viewer-head" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    (__VLS_ctx.selected.release_no);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    (__VLS_ctx.selected.project_name);
+    (__VLS_ctx.selected.version);
+    (__VLS_ctx.selected.logs.length);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "log-viewer-meta" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    (__VLS_ctx.lastLog(__VLS_ctx.selected) ? __VLS_ctx.parseApiDate(__VLS_ctx.lastLog(__VLS_ctx.selected).created_at).toLocaleTimeString('zh-CN') : '--');
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.logExpanded && __VLS_ctx.selected))
+                    return;
+                __VLS_ctx.logExpanded = false;
+            } },
+        'aria-label': "退出放大查看",
+        title: "退出放大查看",
+    });
+    const __VLS_50 = {}.X;
+    /** @type {[typeof __VLS_components.X, ]} */ ;
+    // @ts-ignore
+    const __VLS_51 = __VLS_asFunctionalComponent(__VLS_50, new __VLS_50({}));
+    const __VLS_52 = __VLS_51({}, ...__VLS_functionalComponentArgsRest(__VLS_51));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "terminal log-viewer-terminal" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "terminal-body" },
+    });
+    for (const [log] of __VLS_getVForSourceType((__VLS_ctx.selected.logs))) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            key: (log.id),
+            ...{ class: "log-line" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "log-time" },
+        });
+        (__VLS_ctx.parseApiDate(log.created_at).toLocaleTimeString('zh-CN'));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: ({ 'log-ok': log.level === 'SUCCESS', 'log-warn': ['ERROR', 'WARNING'].includes(log.level) }) },
+        });
+        (log.level.padEnd(7));
+        (log.message);
+    }
+    if (!__VLS_ctx.selected.logs.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    }
+}
+var __VLS_49;
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-row']} */ ;
@@ -637,6 +744,19 @@ if (__VLS_ctx.selected) {
 /** @type {__VLS_StyleScopedClasses['terminal']} */ ;
 /** @type {__VLS_StyleScopedClasses['detail-terminal']} */ ;
 /** @type {__VLS_StyleScopedClasses['terminal-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['terminal-head-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['terminal-expand-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['terminal-body']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-time']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-ok']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-warn']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-viewer-backdrop']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-viewer']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-viewer-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-viewer-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['terminal']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-viewer-terminal']} */ ;
 /** @type {__VLS_StyleScopedClasses['terminal-body']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-time']} */ ;
@@ -648,6 +768,7 @@ const __VLS_self = (await import('vue')).defineComponent({
         return {
             AlertTriangle: AlertTriangle,
             Check: Check,
+            Maximize2: Maximize2,
             Plus: Plus,
             RefreshCw: RefreshCw,
             Rocket: Rocket,
@@ -661,6 +782,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             filter: filter,
             showCreate: showCreate,
             selected: selected,
+            logExpanded: logExpanded,
             saving: saving,
             error: error,
             form: form,
@@ -680,6 +802,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             lastLog: lastLog,
             waitingMinutes: waitingMinutes,
             stepLabel: stepLabel,
+            closeRelease: closeRelease,
         };
     },
 });

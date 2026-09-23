@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { AlertTriangle, Check, Plus, RefreshCw, Rocket, Server, X } from 'lucide-vue-next'
+import { AlertTriangle, Check, Maximize2, Plus, RefreshCw, Rocket, Server, X } from 'lucide-vue-next'
 import { api } from '../api/client'
 import ModalShell from '../components/ModalShell.vue'
 import StatusTrack from '../components/StatusTrack.vue'
@@ -15,6 +15,7 @@ const targets = ref<DeploymentTarget[]>([])
 const filter = ref('all')
 const showCreate = ref(false)
 const selected = ref<Release | null>(null)
+const logExpanded = ref(false)
 const saving = ref(false)
 const error = ref('')
 const route = useRoute()
@@ -69,14 +70,27 @@ function waitingMinutes(item: Release) {
   return Math.floor(Math.max(0, Date.now() - parseApiDate(item.started_at).getTime()) / 60000)
 }
 function stepLabel(status: string) { return ({ running: '执行中', success: '已完成', failed: '失败', simulated: '仅模拟' } as Record<string, string>)[status] || '等待中' }
+function closeRelease() { logExpanded.value = false; selected.value = null }
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && logExpanded.value) logExpanded.value = false
+}
 function applyRouteIntent() {
   const projectId = Number(route.query.project_id || 0)
   if (projects.value.some((item) => item.id === projectId)) selectProject(projectId)
   if (route.query.create) openCreate()
 }
 watch(() => route.query, () => { if (projects.value.length) applyRouteIntent() })
-onMounted(async () => { await load(); applyRouteIntent(); timer = window.setInterval(() => { if (releases.value.some((item) => ['pending','running'].includes(item.status))) load() }, 1500) })
-onBeforeUnmount(() => window.clearInterval(timer))
+watch(selected, (value) => { if (!value) logExpanded.value = false })
+onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
+  await load()
+  applyRouteIntent()
+  timer = window.setInterval(() => { if (releases.value.some((item) => ['pending','running'].includes(item.status))) load() }, 1500)
+})
+onBeforeUnmount(() => {
+  window.clearInterval(timer)
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -90,6 +104,49 @@ onBeforeUnmount(() => window.clearInterval(timer))
       <div class="modal-foot"><button class="ghost-button" @click="showCreate=false">取消</button><button class="primary-button" :disabled="saving||!readyTargets.length" @click="createRelease"><Rocket />{{ saving?'正在创建...':readyTargets.length?`确认发布到 ${readyTargets.length} 台服务器`:'请先配置可用服务器' }}</button></div>
     </ModalShell>
 
-    <div v-if="selected" class="drawer-wrap" @mousedown.self="selected=null"><aside class="drawer release-drawer"><div class="drawer-head"><div class="drawer-title"><div class="project-glyph" :class="selected.project_type">{{ selected.project_type.slice(0,4).toUpperCase() }}</div><div><h2>{{ selected.release_no }}</h2><p>{{ selected.project_name }} · v{{ selected.version }}</p></div></div><button class="icon-button" @click="selected=null"><X /></button></div><div class="drawer-body"><div class="detail-status" :class="selected.status"><component :is="selected.status==='success'?Check:RefreshCw" /><div><strong>{{ selected.status==='success'?'真实发布成功':selected.status==='simulated'?'仅模拟完成，未操作服务器':selected.status==='failed'?'发布失败':'发布正在执行' }}</strong><span v-if="selected.status==='running'">当前：{{ activeStep(selected)?.name || '准备执行' }} · 已等待 {{ waitingMinutes(selected) }} 分钟</span></div></div><div v-if="selected.status==='running'" class="release-live-summary"><strong>正在执行：{{ activeStep(selected)?.name || '准备中' }}</strong><span>最后日志：{{ lastLog(selected) ? parseApiDate(lastLog(selected)!.created_at).toLocaleTimeString('zh-CN') : '暂无' }}</span><span>执行器会持续写入远程命令输出，页面每 1.5 秒自动刷新。</span></div><div class="detail-section"><h4>发布步骤</h4><div class="detail-stage-list"><div v-for="stepItem in selected.steps" :key="stepItem.id" class="detail-stage" :class="stepItem.status"><span>{{ stepItem.sequence }}</span><div><strong>{{ stepItem.name }}</strong><small>{{ stepLabel(stepItem.status) }}{{ stepItem.status==='running' ? ` · ${duration({ ...selected, started_at: stepItem.started_at })}` : '' }}</small></div></div></div></div><div v-if="selected.deployments.length" class="detail-section"><h4>目标发布结果</h4><div class="deployment-results"><div v-for="item in selected.deployments" :key="item.id" class="deployment-result" :class="item.status"><div><strong>{{ item.target_name }}</strong><span>{{ item.status==='success'?'部署成功':item.status==='skipped'?'已跳过':item.status==='running'?'部署中':'部署失败' }}</span></div><p>{{ item.message || (item.status==='running' ? '已连接目标服务器，正在执行远程命令...' : '') }}</p><code v-if="item.deployed_path">{{ item.deployed_path }}</code></div></div></div><div class="detail-section"><h4>实时日志 <small v-if="selected.logs.length">（{{ selected.logs.length }} 条，最新自动置底）</small></h4><div class="terminal detail-terminal"><div class="terminal-head"><span>{{ selected.release_no }} / live logs</span><span>{{ lastLog(selected) ? parseApiDate(lastLog(selected)!.created_at).toLocaleTimeString('zh-CN') : '--' }}</span></div><div class="terminal-body"><div v-for="log in selected.logs" :key="log.id" class="log-line"><span class="log-time">{{ parseApiDate(log.created_at).toLocaleTimeString('zh-CN') }}</span><span :class="{'log-ok':log.level==='SUCCESS','log-warn':['ERROR','WARNING'].includes(log.level)}">{{ log.level.padEnd(7) }} {{ log.message }}</span></div><span v-if="!selected.logs.length">等待执行器输出...</span></div></div></div></div></aside></div>
+    <div v-if="selected" class="drawer-wrap" @mousedown.self="closeRelease">
+      <aside class="drawer release-drawer">
+        <div class="drawer-head">
+          <div class="drawer-title">
+            <div class="project-glyph" :class="selected.project_type">{{ selected.project_type.slice(0,4).toUpperCase() }}</div>
+            <div><h2>{{ selected.release_no }}</h2><p>{{ selected.project_name }} · v{{ selected.version }}</p></div>
+          </div>
+          <button class="icon-button" aria-label="关闭发布详情" @click="closeRelease"><X /></button>
+        </div>
+        <div class="drawer-body">
+          <div class="detail-status" :class="selected.status"><component :is="selected.status==='success'?Check:RefreshCw" /><div><strong>{{ selected.status==='success'?'真实发布成功':selected.status==='simulated'?'仅模拟完成，未操作服务器':selected.status==='failed'?'发布失败':'发布正在执行' }}</strong><span v-if="selected.status==='running'">当前：{{ activeStep(selected)?.name || '准备执行' }} · 已等待 {{ waitingMinutes(selected) }} 分钟</span></div></div>
+          <div v-if="selected.status==='running'" class="release-live-summary"><strong>正在执行：{{ activeStep(selected)?.name || '准备中' }}</strong><span>最后日志：{{ lastLog(selected) ? parseApiDate(lastLog(selected)!.created_at).toLocaleTimeString('zh-CN') : '暂无' }}</span><span>执行器会持续写入远程命令输出，页面每 1.5 秒自动刷新。</span></div>
+          <div class="detail-section"><h4>发布步骤</h4><div class="detail-stage-list"><div v-for="stepItem in selected.steps" :key="stepItem.id" class="detail-stage" :class="stepItem.status"><span>{{ stepItem.sequence }}</span><div><strong>{{ stepItem.name }}</strong><small>{{ stepLabel(stepItem.status) }}{{ stepItem.status==='running' ? ` · ${duration({ ...selected, started_at: stepItem.started_at })}` : '' }}</small></div></div></div></div>
+          <div v-if="selected.deployments.length" class="detail-section"><h4>目标发布结果</h4><div class="deployment-results"><div v-for="item in selected.deployments" :key="item.id" class="deployment-result" :class="item.status"><div><strong>{{ item.target_name }}</strong><span>{{ item.status==='success'?'部署成功':item.status==='skipped'?'已跳过':item.status==='running'?'部署中':'部署失败' }}</span></div><p>{{ item.message || (item.status==='running' ? '已连接目标服务器，正在执行远程命令...' : '') }}</p><code v-if="item.deployed_path">{{ item.deployed_path }}</code></div></div></div>
+          <div class="detail-section">
+            <h4>实时日志 <small v-if="selected.logs.length">（{{ selected.logs.length }} 条，最新自动置底）</small></h4>
+            <div class="terminal detail-terminal">
+              <div class="terminal-head">
+                <span>{{ selected.release_no }} / live logs</span>
+                <div class="terminal-head-actions">
+                  <span>{{ lastLog(selected) ? parseApiDate(lastLog(selected)!.created_at).toLocaleTimeString('zh-CN') : '--' }}</span>
+                  <button class="terminal-expand-button" title="放大查看日志" aria-label="放大查看日志" @click="logExpanded=true"><Maximize2 /></button>
+                </div>
+              </div>
+              <div class="terminal-body"><div v-for="log in selected.logs" :key="log.id" class="log-line"><span class="log-time">{{ parseApiDate(log.created_at).toLocaleTimeString('zh-CN') }}</span><span :class="{'log-ok':log.level==='SUCCESS','log-warn':['ERROR','WARNING'].includes(log.level)}">{{ log.level.padEnd(7) }} {{ log.message }}</span></div><span v-if="!selected.logs.length">等待执行器输出...</span></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <Teleport to="body">
+      <div v-if="logExpanded && selected" class="log-viewer-backdrop" @mousedown.self="logExpanded=false">
+        <section class="log-viewer" role="dialog" aria-modal="true" aria-label="发布实时日志">
+          <header class="log-viewer-head">
+            <div><h3>{{ selected.release_no }} 实时日志</h3><p>{{ selected.project_name }} · v{{ selected.version }} · {{ selected.logs.length }} 条</p></div>
+            <div class="log-viewer-meta"><span>最后更新 {{ lastLog(selected) ? parseApiDate(lastLog(selected)!.created_at).toLocaleTimeString('zh-CN') : '--' }}</span><button aria-label="退出放大查看" title="退出放大查看" @click="logExpanded=false"><X /></button></div>
+          </header>
+          <div class="terminal log-viewer-terminal">
+            <div class="terminal-body"><div v-for="log in selected.logs" :key="log.id" class="log-line"><span class="log-time">{{ parseApiDate(log.created_at).toLocaleTimeString('zh-CN') }}</span><span :class="{'log-ok':log.level==='SUCCESS','log-warn':['ERROR','WARNING'].includes(log.level)}">{{ log.level.padEnd(7) }} {{ log.message }}</span></div><span v-if="!selected.logs.length">等待执行器输出...</span></div>
+          </div>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
