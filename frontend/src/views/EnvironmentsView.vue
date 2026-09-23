@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowRight, Check, FolderKanban, KeyRound, Network, Pencil, Plus, RefreshCw, Server, ShieldCheck, Terminal, Unplug } from 'lucide-vue-next'
+import { AlertTriangle, ArrowRight, Check, FolderKanban, KeyRound, Network, Pencil, Plus, RefreshCw, Server, ShieldCheck, Terminal, Trash2, Unplug } from 'lucide-vue-next'
 import { api } from '../api/client'
 import ModalShell from '../components/ModalShell.vue'
 import type { DeploymentTarget, Environment, Project } from '../types'
@@ -14,6 +14,9 @@ const selectedProjectId = ref(0)
 const selectedEnvironmentId = ref<number | null>(null)
 const showCreate = ref(false)
 const editingId = ref<number | null>(null)
+const deleteCandidate = ref<DeploymentTarget | null>(null)
+const deleting = ref(false)
+const deleteError = ref('')
 const step = ref(1)
 const testingId = ref<number | null>(null)
 const testingAll = ref(false)
@@ -114,6 +117,24 @@ async function saveTarget() {
   } catch (exception:any) { error.value = exception.response?.data?.detail || '目标服务器保存失败' }
   finally { saving.value = false }
 }
+function requestDelete(target: DeploymentTarget) {
+  deleteError.value = ''
+  deleteCandidate.value = target
+}
+async function deleteTarget() {
+  if (!deleteCandidate.value) return
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await api.delete(`/targets/${deleteCandidate.value.id}`)
+    deleteCandidate.value = null
+    await load()
+  } catch (exception:any) {
+    deleteError.value = exception.response?.data?.detail || '目标服务器删除失败'
+  } finally {
+    deleting.value = false
+  }
+}
 function goRelease() {
   if (readyProjectId.value) router.push(`/releases?create=1&project_id=${readyProjectId.value}`)
 }
@@ -153,7 +174,7 @@ onMounted(async () => {
     </div>
     <div v-if="message" class="inline-notice"><Check />{{ message }}<button v-if="readyProjectId" class="notice-action" @click="goRelease">立即发起发布</button><button @click="message=''">×</button></div>
     <div class="toolbar environment-toolbar"><div><strong class="server-list-title">{{ selectedProject?.name || '所有项目' }} · {{ selectedEnvironment?.name || '全部环境' }}</strong><span class="server-list-tip">每条记录表示“某个项目在某个环境中的一台目标服务器”</span></div><div class="toolbar-spacer" /><button class="secondary-button" :disabled="testingAll||!visibleTargets.length" @click="testVisibleTargets"><Terminal />{{ testingAll?'正在逐台测试...':'测试当前列表' }}</button><button class="secondary-button" @click="load"><RefreshCw />刷新状态</button></div>
-    <section class="panel target-table"><div class="target-table-head"><span>服务器</span><span>项目 / 环境</span><span>连接方式</span><span>连接状态</span><span>操作系统</span><span /></div><div v-for="target in visibleTargets" :key="target.id" class="target-row"><div class="target-name"><div class="method-icon" :class="target.connection_type"><component :is="target.connection_type==='ssh'?Terminal:target.connection_type==='kubernetes'?Network:Unplug" /></div><div><strong>{{ target.name }}</strong><span>{{ target.address }}:{{ target.port }} · 应用端口 {{ target.service_port }}</span></div></div><div><strong class="target-env">{{ target.project_name || '未绑定项目' }}</strong><span class="target-workload">{{ target.environment_name }}</span></div><div><span class="method-pill">{{ target.connection_type.toUpperCase() }}</span></div><div><span class="connection-status" :class="target.status"><i />{{ target.status==='online'?'连接正常':target.status==='offline'?'连接失败':'尚未测试' }}</span></div><div><span class="target-workload">{{ target.system_info || '等待连接后探测' }}</span></div><div class="target-actions"><button class="secondary-button" @click="openEdit(target)"><Pencil />配置</button><button class="secondary-button" :disabled="testingId===target.id" @click="testTarget(target)">{{ testingId===target.id?'测试中...':'测试连接' }}</button></div></div><div v-if="!visibleTargets.length" class="list-empty">这个项目在该环境还没有服务器，点击“添加目标服务器”开始接入。</div></section>
+    <section class="panel target-table"><div class="target-table-head"><span>服务器</span><span>项目 / 环境</span><span>连接方式</span><span>连接状态</span><span>操作系统</span><span /></div><div v-for="target in visibleTargets" :key="target.id" class="target-row"><div class="target-name"><div class="method-icon" :class="target.connection_type"><component :is="target.connection_type==='ssh'?Terminal:target.connection_type==='kubernetes'?Network:Unplug" /></div><div><strong>{{ target.name }}</strong><span>{{ target.address }}:{{ target.port }} · 应用端口 {{ target.service_port }}</span></div></div><div><strong class="target-env">{{ target.project_name || '未绑定项目' }}</strong><span class="target-workload">{{ target.environment_name }}</span></div><div><span class="method-pill">{{ target.connection_type.toUpperCase() }}</span></div><div><span class="connection-status" :class="target.status"><i />{{ target.status==='online'?'连接正常':target.status==='offline'?'连接失败':'尚未测试' }}</span></div><div><span class="target-workload">{{ target.system_info || '等待连接后探测' }}</span></div><div class="target-actions"><button class="secondary-button" @click="openEdit(target)"><Pencil />配置</button><button class="secondary-button" :disabled="testingId===target.id" @click="testTarget(target)">{{ testingId===target.id?'测试中...':'测试连接' }}</button><button class="icon-button delete-icon-button" title="删除服务器" aria-label="删除服务器" @click="requestDelete(target)"><Trash2 /></button></div></div><div v-if="!visibleTargets.length" class="list-empty">这个项目在该环境还没有服务器，点击“添加目标服务器”开始接入。</div></section>
 
     <ModalShell v-if="showCreate" :title="editingId?'配置目标服务器':'添加目标服务器'" subtitle="目标服务器是最终接收制品并运行应用的真实机器" @close="showCreate=false">
       <div class="stepper"><div v-for="(name,index) in ['连接方式','连接配置','部署模板']" :key="name" class="step" :class="{active:step===index+1,done:step>index+1}"><span class="step-index">{{ step>index+1?'✓':index+1 }}</span>{{ name }}</div></div>
@@ -164,6 +185,11 @@ onMounted(async () => {
         <span v-if="error" class="error-text target-error">{{ error }}</span>
       </div>
       <div class="modal-foot"><button class="ghost-button" @click="step===1?showCreate=false:step--">{{ step===1?'取消':'上一步' }}</button><button v-if="step<3" class="primary-button" @click="step++">下一步</button><button v-else class="primary-button" :disabled="saving" @click="saveTarget">{{ saving?'保存并测试中...':'保存并测试真实连接' }}</button></div>
+    </ModalShell>
+
+    <ModalShell v-if="deleteCandidate" title="删除目标服务器" subtitle="只删除平台配置，不会登录或清理服务器" size="small" @close="deleteCandidate=null">
+      <div class="modal-body delete-confirm-body"><div class="delete-warning-icon"><AlertTriangle /></div><div><strong>确认删除 {{ deleteCandidate.name }}？</strong><p>将移除 {{ deleteCandidate.project_name }} 在 {{ deleteCandidate.environment_name }} 中的服务器连接和加密凭证，不会停止目标服务器上已运行的应用。</p><span v-if="deleteError" class="error-text">{{ deleteError }}</span></div></div>
+      <div class="modal-foot"><button class="ghost-button" :disabled="deleting" @click="deleteCandidate=null">取消</button><button class="danger-button" :disabled="deleting" @click="deleteTarget"><Trash2 />{{ deleting?'正在删除...':'确认删除服务器' }}</button></div>
     </ModalShell>
   </div>
 </template>

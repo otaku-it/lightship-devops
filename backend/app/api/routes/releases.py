@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -123,3 +123,19 @@ def get_release(
     if not item:
         raise HTTPException(status_code=404, detail="发布单不存在")
     return release_read(item)
+
+
+@router.delete("/{release_id}", status_code=204)
+def delete_release(
+    release_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Response:
+    release = db.get(Release, release_id)
+    if not release:
+        raise HTTPException(status_code=404, detail="发布单不存在")
+    if release.status in {"pending", "running"}:
+        raise HTTPException(status_code=409, detail="发布正在执行，不能删除")
+    db.delete(release)
+    db.commit()
+    return Response(status_code=204)

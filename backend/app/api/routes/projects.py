@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -121,3 +121,37 @@ def get_project(
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
     return project_read(project, db)
+
+
+@router.delete("/{project_id}", status_code=204)
+def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Response:
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    active_release_count = db.scalar(
+        select(func.count())
+        .select_from(Release)
+        .where(Release.project_id == project_id, Release.status.in_(("pending", "running")))
+    ) or 0
+    if active_release_count:
+        raise HTTPException(status_code=409, detail="项目存在正在执行的发布，不能删除")
+
+    releases = list(db.scalars(select(Release).where(Release.project_id == project_id)))
+    for release in releases:
+        db.delete(release)
+    db.flush()
+
+    targets = list(
+        db.scalars(select(DeploymentTarget).where(DeploymentTarget.project_id == project_id))
+    )
+    for target in targets:
+        db.delete(target)
+    db.flush()
+
+    db.delete(project)
+    db.commit()
+    return Response(status_code=204)

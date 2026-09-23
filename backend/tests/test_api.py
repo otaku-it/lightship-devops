@@ -148,3 +148,136 @@ def test_reject_invalid_compose_project_name(client, auth_headers):
     }
     response = client.post("/api/v1/projects", headers=auth_headers, json=payload)
     assert response.status_code == 422
+
+
+def test_delete_release_target_and_project(client, auth_headers):
+    project = client.post(
+        "/api/v1/projects",
+        headers=auth_headers,
+        json={
+            "name": "deletion-test-project",
+            "project_type": "python",
+            "repository_url": "https://git.example.com/test/deletion.git",
+        },
+    )
+    assert project.status_code == 201
+    project_id = project.json()["id"]
+
+    target = client.post(
+        "/api/v1/targets",
+        headers=auth_headers,
+        json={
+            "project_id": project_id,
+            "environment_id": 1,
+            "name": "deletion-test-target",
+            "connection_type": "ssh",
+            "address": "127.0.0.1",
+        },
+    )
+    assert target.status_code == 201
+    target_id = target.json()["id"]
+
+    release = client.post(
+        "/api/v1/releases",
+        headers=auth_headers,
+        json={
+            "project_id": project_id,
+            "environment_id": 1,
+            "version": "1.0.0",
+            "branch": "main",
+            "strategy": "rolling",
+        },
+    )
+    assert release.status_code == 201
+    release_id = release.json()["id"]
+
+    deleted_release = client.delete(
+        f"/api/v1/releases/{release_id}", headers=auth_headers
+    )
+    assert deleted_release.status_code == 204
+    assert client.get(
+        f"/api/v1/releases/{release_id}", headers=auth_headers
+    ).status_code == 404
+
+    deleted_target = client.delete(
+        f"/api/v1/targets/{target_id}", headers=auth_headers
+    )
+    assert deleted_target.status_code == 204
+    assert all(
+        item["id"] != target_id
+        for item in client.get("/api/v1/targets", headers=auth_headers).json()
+    )
+
+    deleted_project = client.delete(
+        f"/api/v1/projects/{project_id}", headers=auth_headers
+    )
+    assert deleted_project.status_code == 204
+    assert client.get(
+        f"/api/v1/projects/{project_id}", headers=auth_headers
+    ).status_code == 404
+
+
+def test_delete_project_cascades_history_and_targets(client, auth_headers):
+    from app.core.database import SessionLocal
+    from app.models.release import ReleaseDeployment
+
+    project = client.post(
+        "/api/v1/projects",
+        headers=auth_headers,
+        json={
+            "name": "cascade-delete-project",
+            "project_type": "frontend",
+            "repository_url": "https://git.example.com/test/cascade.git",
+        },
+    ).json()
+    target = client.post(
+        "/api/v1/targets",
+        headers=auth_headers,
+        json={
+            "project_id": project["id"],
+            "environment_id": 1,
+            "name": "cascade-delete-target",
+            "connection_type": "ssh",
+            "address": "127.0.0.2",
+        },
+    ).json()
+    release = client.post(
+        "/api/v1/releases",
+        headers=auth_headers,
+        json={
+            "project_id": project["id"],
+            "environment_id": 1,
+            "version": "2.0.0",
+            "branch": "main",
+            "strategy": "rolling",
+        },
+    ).json()
+
+    with SessionLocal() as db:
+        db.add(
+            ReleaseDeployment(
+                release_id=release["id"],
+                target_id=target["id"],
+                target_name=target["name"],
+                status="success",
+            )
+        )
+        db.commit()
+
+    blocked_target_delete = client.delete(
+        f"/api/v1/targets/{target['id']}", headers=auth_headers
+    )
+    assert blocked_target_delete.status_code == 409
+    assert "发布结果引用" in blocked_target_delete.json()["detail"]
+
+    response = client.delete(
+        f"/api/v1/projects/{project['id']}", headers=auth_headers
+    )
+    assert response.status_code == 204
+    assert client.get(
+        f"/api/v1/releases/{release['id']}", headers=auth_headers
+    ).status_code == 404
+    assert all(
+        item["id"] != target["id"]
+        for item in client.get("/api/v1/targets", headers=auth_headers).json()
+    )

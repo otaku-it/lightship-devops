@@ -1,6 +1,6 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { CheckCircle2, Container, GitBranch, Pencil, Plus, Rocket, Server, ShieldCheck } from 'lucide-vue-next';
+import { AlertTriangle, CheckCircle2, Container, GitBranch, Pencil, Plus, Rocket, Server, ShieldCheck, Trash2 } from 'lucide-vue-next';
 import { api } from '../api/client';
 import ModalShell from '../components/ModalShell.vue';
 const projects = ref([]);
@@ -9,6 +9,9 @@ const filter = ref('all');
 const search = ref('');
 const showCreate = ref(false);
 const editingId = ref(null);
+const deleteCandidate = ref(null);
+const deleting = ref(false);
+const deleteError = ref('');
 const saving = ref(false);
 const error = ref('');
 const router = useRouter();
@@ -70,6 +73,27 @@ async function saveProject(configureAfterSave = false) {
     }
     finally {
         saving.value = false;
+    }
+}
+function requestDelete(project) {
+    deleteError.value = '';
+    deleteCandidate.value = project;
+}
+async function deleteProject() {
+    if (!deleteCandidate.value)
+        return;
+    deleting.value = true;
+    deleteError.value = '';
+    try {
+        await api.delete(`/projects/${deleteCandidate.value.id}`);
+        deleteCandidate.value = null;
+        await load();
+    }
+    catch (exception) {
+        deleteError.value = exception.response?.data?.detail || '项目删除失败';
+    }
+    finally {
+        deleting.value = false;
     }
 }
 onMounted(load);
@@ -172,6 +196,9 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
         ...{ class: (project.deployment_mode !== 'file' ? 'docker' : project.project_type) },
     });
     (project.deployment_mode === 'compose' ? 'COMP' : project.deployment_mode === 'docker' ? 'DOCK' : project.project_type.slice(0, 4).toUpperCase());
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "project-card-actions" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 __VLS_ctx.openEdit(project);
@@ -183,6 +210,19 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
     // @ts-ignore
     const __VLS_13 = __VLS_asFunctionalComponent(__VLS_12, new __VLS_12({}));
     const __VLS_14 = __VLS_13({}, ...__VLS_functionalComponentArgsRest(__VLS_13));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                __VLS_ctx.requestDelete(project);
+            } },
+        ...{ class: "icon-button delete-icon-button" },
+        title: "删除项目",
+        'aria-label': "删除项目",
+    });
+    const __VLS_16 = {}.Trash2;
+    /** @type {[typeof __VLS_components.Trash2, ]} */ ;
+    // @ts-ignore
+    const __VLS_17 = __VLS_asFunctionalComponent(__VLS_16, new __VLS_16({}));
+    const __VLS_18 = __VLS_17({}, ...__VLS_functionalComponentArgsRest(__VLS_17));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
     (project.name);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
@@ -191,10 +231,10 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
         ...{ class: "project-readiness" },
         ...{ class: ({ ready: __VLS_ctx.readyTargetCount(project.id) > 0 }) },
     });
-    const __VLS_16 = ((__VLS_ctx.readyTargetCount(project.id) > 0 ? __VLS_ctx.CheckCircle2 : __VLS_ctx.Server));
+    const __VLS_20 = ((__VLS_ctx.readyTargetCount(project.id) > 0 ? __VLS_ctx.CheckCircle2 : __VLS_ctx.Server));
     // @ts-ignore
-    const __VLS_17 = __VLS_asFunctionalComponent(__VLS_16, new __VLS_16({}));
-    const __VLS_18 = __VLS_17({}, ...__VLS_functionalComponentArgsRest(__VLS_17));
+    const __VLS_21 = __VLS_asFunctionalComponent(__VLS_20, new __VLS_20({}));
+    const __VLS_22 = __VLS_21({}, ...__VLS_functionalComponentArgsRest(__VLS_21));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.readyTargetCount(project.id) > 0 ? '已具备发布条件' : '还不能发布');
@@ -227,11 +267,11 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "branch" },
     });
-    const __VLS_20 = {}.GitBranch;
+    const __VLS_24 = {}.GitBranch;
     /** @type {[typeof __VLS_components.GitBranch, ]} */ ;
     // @ts-ignore
-    const __VLS_21 = __VLS_asFunctionalComponent(__VLS_20, new __VLS_20({}));
-    const __VLS_22 = __VLS_21({}, ...__VLS_functionalComponentArgsRest(__VLS_21));
+    const __VLS_25 = __VLS_asFunctionalComponent(__VLS_24, new __VLS_24({}));
+    const __VLS_26 = __VLS_25({}, ...__VLS_functionalComponentArgsRest(__VLS_25));
     (project.default_branch);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "project-health" },
@@ -250,11 +290,11 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
             } },
         ...{ class: "secondary-button" },
     });
-    const __VLS_24 = {}.Server;
+    const __VLS_28 = {}.Server;
     /** @type {[typeof __VLS_components.Server, ]} */ ;
     // @ts-ignore
-    const __VLS_25 = __VLS_asFunctionalComponent(__VLS_24, new __VLS_24({}));
-    const __VLS_26 = __VLS_25({}, ...__VLS_functionalComponentArgsRest(__VLS_25));
+    const __VLS_29 = __VLS_asFunctionalComponent(__VLS_28, new __VLS_28({}));
+    const __VLS_30 = __VLS_29({}, ...__VLS_functionalComponentArgsRest(__VLS_29));
     (__VLS_ctx.projectTargets(project.id).length ? '管理服务器' : '配置服务器');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
@@ -263,36 +303,36 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
         ...{ class: "primary-button" },
         disabled: (!__VLS_ctx.readyTargetCount(project.id)),
     });
-    const __VLS_28 = {}.Rocket;
+    const __VLS_32 = {}.Rocket;
     /** @type {[typeof __VLS_components.Rocket, ]} */ ;
     // @ts-ignore
-    const __VLS_29 = __VLS_asFunctionalComponent(__VLS_28, new __VLS_28({}));
-    const __VLS_30 = __VLS_29({}, ...__VLS_functionalComponentArgsRest(__VLS_29));
+    const __VLS_33 = __VLS_asFunctionalComponent(__VLS_32, new __VLS_32({}));
+    const __VLS_34 = __VLS_33({}, ...__VLS_functionalComponentArgsRest(__VLS_33));
 }
 if (__VLS_ctx.showCreate) {
     /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
     // @ts-ignore
-    const __VLS_32 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+    const __VLS_36 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
         ...{ 'onClose': {} },
         title: (__VLS_ctx.editingId ? '配置项目' : '接入新项目'),
         subtitle: "发布时平台会真实拉取代码、执行构建并打包制品",
     }));
-    const __VLS_33 = __VLS_32({
+    const __VLS_37 = __VLS_36({
         ...{ 'onClose': {} },
         title: (__VLS_ctx.editingId ? '配置项目' : '接入新项目'),
         subtitle: "发布时平台会真实拉取代码、执行构建并打包制品",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_32));
-    let __VLS_35;
-    let __VLS_36;
-    let __VLS_37;
-    const __VLS_38 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_36));
+    let __VLS_39;
+    let __VLS_40;
+    let __VLS_41;
+    const __VLS_42 = {
         onClose: (...[$event]) => {
             if (!(__VLS_ctx.showCreate))
                 return;
             __VLS_ctx.showCreate = false;
         }
     };
-    __VLS_34.slots.default;
+    __VLS_38.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "modal-body" },
     });
@@ -358,11 +398,11 @@ if (__VLS_ctx.showCreate) {
         type: "button",
         ...{ class: ({ active: __VLS_ctx.form.deployment_mode === 'docker' }) },
     });
-    const __VLS_39 = {}.Container;
+    const __VLS_43 = {}.Container;
     /** @type {[typeof __VLS_components.Container, ]} */ ;
     // @ts-ignore
-    const __VLS_40 = __VLS_asFunctionalComponent(__VLS_39, new __VLS_39({}));
-    const __VLS_41 = __VLS_40({}, ...__VLS_functionalComponentArgsRest(__VLS_40));
+    const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({}));
+    const __VLS_45 = __VLS_44({}, ...__VLS_functionalComponentArgsRest(__VLS_44));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.showCreate))
@@ -372,11 +412,11 @@ if (__VLS_ctx.showCreate) {
         type: "button",
         ...{ class: ({ active: __VLS_ctx.form.deployment_mode === 'compose' }) },
     });
-    const __VLS_43 = {}.Container;
+    const __VLS_47 = {}.Container;
     /** @type {[typeof __VLS_components.Container, ]} */ ;
     // @ts-ignore
-    const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({}));
-    const __VLS_45 = __VLS_44({}, ...__VLS_functionalComponentArgsRest(__VLS_44));
+    const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({}));
+    const __VLS_49 = __VLS_48({}, ...__VLS_functionalComponentArgsRest(__VLS_48));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full" },
@@ -454,11 +494,11 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full docker-note" },
         });
-        const __VLS_47 = {}.Container;
+        const __VLS_51 = {}.Container;
         /** @type {[typeof __VLS_components.Container, ]} */ ;
         // @ts-ignore
-        const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({}));
-        const __VLS_49 = __VLS_48({}, ...__VLS_functionalComponentArgsRest(__VLS_48));
+        const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
+        const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -485,11 +525,11 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full docker-note" },
         });
-        const __VLS_51 = {}.Container;
+        const __VLS_55 = {}.Container;
         /** @type {[typeof __VLS_components.Container, ]} */ ;
         // @ts-ignore
-        const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
-        const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
+        const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
+        const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -514,11 +554,11 @@ if (__VLS_ctx.showCreate) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "security-note full" },
     });
-    const __VLS_55 = {}.ShieldCheck;
+    const __VLS_59 = {}.ShieldCheck;
     /** @type {[typeof __VLS_components.ShieldCheck, ]} */ ;
     // @ts-ignore
-    const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
-    const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
+    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
+    const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -561,13 +601,89 @@ if (__VLS_ctx.showCreate) {
         ...{ class: "primary-button" },
         disabled: (__VLS_ctx.saving),
     });
-    const __VLS_59 = {}.Server;
+    const __VLS_63 = {}.Server;
     /** @type {[typeof __VLS_components.Server, ]} */ ;
     // @ts-ignore
-    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
-    const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
+    const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({}));
+    const __VLS_65 = __VLS_64({}, ...__VLS_functionalComponentArgsRest(__VLS_64));
     (__VLS_ctx.saving ? '正在保存...' : '保存并配置服务器');
-    var __VLS_34;
+    var __VLS_38;
+}
+if (__VLS_ctx.deleteCandidate) {
+    /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
+    // @ts-ignore
+    const __VLS_67 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+        ...{ 'onClose': {} },
+        title: "删除项目",
+        subtitle: "此操作不可恢复",
+        size: "small",
+    }));
+    const __VLS_68 = __VLS_67({
+        ...{ 'onClose': {} },
+        title: "删除项目",
+        subtitle: "此操作不可恢复",
+        size: "small",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_67));
+    let __VLS_70;
+    let __VLS_71;
+    let __VLS_72;
+    const __VLS_73 = {
+        onClose: (...[$event]) => {
+            if (!(__VLS_ctx.deleteCandidate))
+                return;
+            __VLS_ctx.deleteCandidate = null;
+        }
+    };
+    __VLS_69.slots.default;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "modal-body delete-confirm-body" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "delete-warning-icon" },
+    });
+    const __VLS_74 = {}.AlertTriangle;
+    /** @type {[typeof __VLS_components.AlertTriangle, ]} */ ;
+    // @ts-ignore
+    const __VLS_75 = __VLS_asFunctionalComponent(__VLS_74, new __VLS_74({}));
+    const __VLS_76 = __VLS_75({}, ...__VLS_functionalComponentArgsRest(__VLS_75));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.deleteCandidate.name);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({});
+    (__VLS_ctx.deleteCandidate.release_count);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({});
+    (__VLS_ctx.projectTargets(__VLS_ctx.deleteCandidate.id).length);
+    if (__VLS_ctx.deleteError) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "error-text" },
+        });
+        (__VLS_ctx.deleteError);
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "modal-foot" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.deleteCandidate))
+                    return;
+                __VLS_ctx.deleteCandidate = null;
+            } },
+        ...{ class: "ghost-button" },
+        disabled: (__VLS_ctx.deleting),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.deleteProject) },
+        ...{ class: "danger-button" },
+        disabled: (__VLS_ctx.deleting),
+    });
+    const __VLS_78 = {}.Trash2;
+    /** @type {[typeof __VLS_components.Trash2, ]} */ ;
+    // @ts-ignore
+    const __VLS_79 = __VLS_asFunctionalComponent(__VLS_78, new __VLS_78({}));
+    const __VLS_80 = __VLS_79({}, ...__VLS_functionalComponentArgsRest(__VLS_79));
+    (__VLS_ctx.deleting ? '正在删除...' : '确认删除项目');
+    var __VLS_69;
 }
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
@@ -591,7 +707,10 @@ if (__VLS_ctx.showCreate) {
 /** @type {__VLS_StyleScopedClasses['project-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['project-card-top']} */ ;
 /** @type {__VLS_StyleScopedClasses['project-glyph']} */ ;
+/** @type {__VLS_StyleScopedClasses['project-card-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['secondary-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['delete-icon-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['project-readiness']} */ ;
 /** @type {__VLS_StyleScopedClasses['ready']} */ ;
 /** @type {__VLS_StyleScopedClasses['project-card-stats']} */ ;
@@ -650,10 +769,18 @@ if (__VLS_ctx.showCreate) {
 /** @type {__VLS_StyleScopedClasses['modal-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['secondary-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-body']} */ ;
+/** @type {__VLS_StyleScopedClasses['delete-confirm-body']} */ ;
+/** @type {__VLS_StyleScopedClasses['delete-warning-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['error-text']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-foot']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['danger-button']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
+            AlertTriangle: AlertTriangle,
             CheckCircle2: CheckCircle2,
             Container: Container,
             GitBranch: GitBranch,
@@ -662,11 +789,15 @@ const __VLS_self = (await import('vue')).defineComponent({
             Rocket: Rocket,
             Server: Server,
             ShieldCheck: ShieldCheck,
+            Trash2: Trash2,
             ModalShell: ModalShell,
             filter: filter,
             search: search,
             showCreate: showCreate,
             editingId: editingId,
+            deleteCandidate: deleteCandidate,
+            deleting: deleting,
+            deleteError: deleteError,
             saving: saving,
             error: error,
             form: form,
@@ -682,6 +813,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             deploymentDetail: deploymentDetail,
             openEdit: openEdit,
             saveProject: saveProject,
+            requestDelete: requestDelete,
+            deleteProject: deleteProject,
         };
     },
 });

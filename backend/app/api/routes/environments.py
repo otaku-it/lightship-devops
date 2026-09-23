@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -6,6 +6,7 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.models.environment import DeploymentTarget, Environment, TargetAccess
 from app.models.project import Project
+from app.models.release import ReleaseDeployment
 from app.models.user import User
 from app.schemas.environment import (
     ConnectionTestRequest,
@@ -156,6 +157,30 @@ def update_target(
     db.commit()
     db.refresh(target)
     return target_read(target)
+
+
+@router.delete("/targets/{target_id}", status_code=204)
+def delete_target(
+    target_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Response:
+    target = db.get(DeploymentTarget, target_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="部署目标不存在")
+    release_count = db.scalar(
+        select(func.count())
+        .select_from(ReleaseDeployment)
+        .where(ReleaseDeployment.target_id == target_id)
+    ) or 0
+    if release_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"该服务器仍被 {release_count} 条发布结果引用，请先删除相关发布记录",
+        )
+    db.delete(target)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/targets/{target_id}/test", response_model=ConnectionTestResult)

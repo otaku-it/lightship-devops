@@ -1,6 +1,6 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowRight, Check, FolderKanban, KeyRound, Network, Pencil, Plus, RefreshCw, Server, ShieldCheck, Terminal, Unplug } from 'lucide-vue-next';
+import { AlertTriangle, ArrowRight, Check, FolderKanban, KeyRound, Network, Pencil, Plus, RefreshCw, Server, ShieldCheck, Terminal, Trash2, Unplug } from 'lucide-vue-next';
 import { api } from '../api/client';
 import ModalShell from '../components/ModalShell.vue';
 const targets = ref([]);
@@ -10,6 +10,9 @@ const selectedProjectId = ref(0);
 const selectedEnvironmentId = ref(null);
 const showCreate = ref(false);
 const editingId = ref(null);
+const deleteCandidate = ref(null);
+const deleting = ref(false);
+const deleteError = ref('');
 const step = ref(1);
 const testingId = ref(null);
 const testingAll = ref(false);
@@ -145,6 +148,27 @@ async function saveTarget() {
     }
     finally {
         saving.value = false;
+    }
+}
+function requestDelete(target) {
+    deleteError.value = '';
+    deleteCandidate.value = target;
+}
+async function deleteTarget() {
+    if (!deleteCandidate.value)
+        return;
+    deleting.value = true;
+    deleteError.value = '';
+    try {
+        await api.delete(`/targets/${deleteCandidate.value.id}`);
+        deleteCandidate.value = null;
+        await load();
+    }
+    catch (exception) {
+        deleteError.value = exception.response?.data?.detail || '目标服务器删除失败';
+    }
+    finally {
+        deleting.value = false;
     }
 }
 function goRelease() {
@@ -432,6 +456,19 @@ for (const [target] of __VLS_getVForSourceType((__VLS_ctx.visibleTargets))) {
         disabled: (__VLS_ctx.testingId === target.id),
     });
     (__VLS_ctx.testingId === target.id ? '测试中...' : '测试连接');
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                __VLS_ctx.requestDelete(target);
+            } },
+        ...{ class: "icon-button delete-icon-button" },
+        title: "删除服务器",
+        'aria-label': "删除服务器",
+    });
+    const __VLS_40 = {}.Trash2;
+    /** @type {[typeof __VLS_components.Trash2, ]} */ ;
+    // @ts-ignore
+    const __VLS_41 = __VLS_asFunctionalComponent(__VLS_40, new __VLS_40({}));
+    const __VLS_42 = __VLS_41({}, ...__VLS_functionalComponentArgsRest(__VLS_41));
 }
 if (!__VLS_ctx.visibleTargets.length) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -441,27 +478,27 @@ if (!__VLS_ctx.visibleTargets.length) {
 if (__VLS_ctx.showCreate) {
     /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
     // @ts-ignore
-    const __VLS_40 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+    const __VLS_44 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
         ...{ 'onClose': {} },
         title: (__VLS_ctx.editingId ? '配置目标服务器' : '添加目标服务器'),
         subtitle: "目标服务器是最终接收制品并运行应用的真实机器",
     }));
-    const __VLS_41 = __VLS_40({
+    const __VLS_45 = __VLS_44({
         ...{ 'onClose': {} },
         title: (__VLS_ctx.editingId ? '配置目标服务器' : '添加目标服务器'),
         subtitle: "目标服务器是最终接收制品并运行应用的真实机器",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_40));
-    let __VLS_43;
-    let __VLS_44;
-    let __VLS_45;
-    const __VLS_46 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_44));
+    let __VLS_47;
+    let __VLS_48;
+    let __VLS_49;
+    const __VLS_50 = {
         onClose: (...[$event]) => {
             if (!(__VLS_ctx.showCreate))
                 return;
             __VLS_ctx.showCreate = false;
         }
     };
-    __VLS_42.slots.default;
+    __VLS_46.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "stepper" },
     });
@@ -505,10 +542,10 @@ if (__VLS_ctx.showCreate) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "method-choice-icon" },
             });
-            const __VLS_47 = ((method.icon));
+            const __VLS_51 = ((method.icon));
             // @ts-ignore
-            const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({}));
-            const __VLS_49 = __VLS_48({}, ...__VLS_functionalComponentArgsRest(__VLS_48));
+            const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
+            const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "tiny-pill" },
             });
@@ -521,21 +558,21 @@ if (__VLS_ctx.showCreate) {
                 ...{ class: "choice-radio" },
             });
             if (__VLS_ctx.form.connection_type === method.key) {
-                const __VLS_51 = {}.Check;
+                const __VLS_55 = {}.Check;
                 /** @type {[typeof __VLS_components.Check, ]} */ ;
                 // @ts-ignore
-                const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
-                const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
+                const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
+                const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
             }
         }
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note" },
         });
-        const __VLS_55 = {}.ShieldCheck;
+        const __VLS_59 = {}.ShieldCheck;
         /** @type {[typeof __VLS_components.ShieldCheck, ]} */ ;
         // @ts-ignore
-        const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
-        const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
+        const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
+        const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -670,11 +707,11 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full" },
         });
-        const __VLS_59 = {}.KeyRound;
+        const __VLS_63 = {}.KeyRound;
         /** @type {[typeof __VLS_components.KeyRound, ]} */ ;
         // @ts-ignore
-        const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
-        const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
+        const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({}));
+        const __VLS_65 = __VLS_64({}, ...__VLS_functionalComponentArgsRest(__VLS_64));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -687,11 +724,11 @@ if (__VLS_ctx.showCreate) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "security-note full docker-note" },
             });
-            const __VLS_63 = {}.Server;
+            const __VLS_67 = {}.Server;
             /** @type {[typeof __VLS_components.Server, ]} */ ;
             // @ts-ignore
-            const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({}));
-            const __VLS_65 = __VLS_64({}, ...__VLS_functionalComponentArgsRest(__VLS_64));
+            const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({}));
+            const __VLS_69 = __VLS_68({}, ...__VLS_functionalComponentArgsRest(__VLS_68));
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
             __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -731,11 +768,11 @@ if (__VLS_ctx.showCreate) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "security-note full" },
             });
-            const __VLS_67 = {}.Server;
+            const __VLS_71 = {}.Server;
             /** @type {[typeof __VLS_components.Server, ]} */ ;
             // @ts-ignore
-            const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({}));
-            const __VLS_69 = __VLS_68({}, ...__VLS_functionalComponentArgsRest(__VLS_68));
+            const __VLS_72 = __VLS_asFunctionalComponent(__VLS_71, new __VLS_71({}));
+            const __VLS_73 = __VLS_72({}, ...__VLS_functionalComponentArgsRest(__VLS_72));
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
             __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -779,7 +816,81 @@ if (__VLS_ctx.showCreate) {
         });
         (__VLS_ctx.saving ? '保存并测试中...' : '保存并测试真实连接');
     }
-    var __VLS_42;
+    var __VLS_46;
+}
+if (__VLS_ctx.deleteCandidate) {
+    /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
+    // @ts-ignore
+    const __VLS_75 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+        ...{ 'onClose': {} },
+        title: "删除目标服务器",
+        subtitle: "只删除平台配置，不会登录或清理服务器",
+        size: "small",
+    }));
+    const __VLS_76 = __VLS_75({
+        ...{ 'onClose': {} },
+        title: "删除目标服务器",
+        subtitle: "只删除平台配置，不会登录或清理服务器",
+        size: "small",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_75));
+    let __VLS_78;
+    let __VLS_79;
+    let __VLS_80;
+    const __VLS_81 = {
+        onClose: (...[$event]) => {
+            if (!(__VLS_ctx.deleteCandidate))
+                return;
+            __VLS_ctx.deleteCandidate = null;
+        }
+    };
+    __VLS_77.slots.default;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "modal-body delete-confirm-body" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "delete-warning-icon" },
+    });
+    const __VLS_82 = {}.AlertTriangle;
+    /** @type {[typeof __VLS_components.AlertTriangle, ]} */ ;
+    // @ts-ignore
+    const __VLS_83 = __VLS_asFunctionalComponent(__VLS_82, new __VLS_82({}));
+    const __VLS_84 = __VLS_83({}, ...__VLS_functionalComponentArgsRest(__VLS_83));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.deleteCandidate.name);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    (__VLS_ctx.deleteCandidate.project_name);
+    (__VLS_ctx.deleteCandidate.environment_name);
+    if (__VLS_ctx.deleteError) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "error-text" },
+        });
+        (__VLS_ctx.deleteError);
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "modal-foot" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.deleteCandidate))
+                    return;
+                __VLS_ctx.deleteCandidate = null;
+            } },
+        ...{ class: "ghost-button" },
+        disabled: (__VLS_ctx.deleting),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.deleteTarget) },
+        ...{ class: "danger-button" },
+        disabled: (__VLS_ctx.deleting),
+    });
+    const __VLS_86 = {}.Trash2;
+    /** @type {[typeof __VLS_components.Trash2, ]} */ ;
+    // @ts-ignore
+    const __VLS_87 = __VLS_asFunctionalComponent(__VLS_86, new __VLS_86({}));
+    const __VLS_88 = __VLS_87({}, ...__VLS_functionalComponentArgsRest(__VLS_87));
+    (__VLS_ctx.deleting ? '正在删除...' : '确认删除服务器');
+    var __VLS_77;
 }
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
@@ -821,6 +932,8 @@ if (__VLS_ctx.showCreate) {
 /** @type {__VLS_StyleScopedClasses['target-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['secondary-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['secondary-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['delete-icon-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['list-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['stepper']} */ ;
 /** @type {__VLS_StyleScopedClasses['step']} */ ;
@@ -881,10 +994,18 @@ if (__VLS_ctx.showCreate) {
 /** @type {__VLS_StyleScopedClasses['ghost-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-body']} */ ;
+/** @type {__VLS_StyleScopedClasses['delete-confirm-body']} */ ;
+/** @type {__VLS_StyleScopedClasses['delete-warning-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['error-text']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-foot']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['danger-button']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
+            AlertTriangle: AlertTriangle,
             ArrowRight: ArrowRight,
             Check: Check,
             FolderKanban: FolderKanban,
@@ -896,6 +1017,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             Server: Server,
             ShieldCheck: ShieldCheck,
             Terminal: Terminal,
+            Trash2: Trash2,
             Unplug: Unplug,
             ModalShell: ModalShell,
             environments: environments,
@@ -904,6 +1026,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectedEnvironmentId: selectedEnvironmentId,
             showCreate: showCreate,
             editingId: editingId,
+            deleteCandidate: deleteCandidate,
+            deleting: deleting,
+            deleteError: deleteError,
             step: step,
             testingId: testingId,
             testingAll: testingAll,
@@ -926,6 +1051,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             testTarget: testTarget,
             testVisibleTargets: testVisibleTargets,
             saveTarget: saveTarget,
+            requestDelete: requestDelete,
+            deleteTarget: deleteTarget,
             goRelease: goRelease,
         };
     },

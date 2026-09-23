@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { AlertTriangle, Check, Maximize2, Plus, RefreshCw, Rocket, Server, X } from 'lucide-vue-next'
+import { AlertTriangle, Check, Maximize2, Plus, RefreshCw, Rocket, Server, Trash2, X } from 'lucide-vue-next'
 import { api } from '../api/client'
 import ModalShell from '../components/ModalShell.vue'
 import StatusTrack from '../components/StatusTrack.vue'
@@ -16,6 +16,9 @@ const filter = ref('all')
 const showCreate = ref(false)
 const selected = ref<Release | null>(null)
 const logExpanded = ref(false)
+const deleteCandidate = ref<Release | null>(null)
+const deleting = ref(false)
+const deleteError = ref('')
 const saving = ref(false)
 const error = ref('')
 const route = useRoute()
@@ -71,6 +74,26 @@ function waitingMinutes(item: Release) {
 }
 function stepLabel(status: string) { return ({ running: '执行中', success: '已完成', failed: '失败', simulated: '仅模拟' } as Record<string, string>)[status] || '等待中' }
 function closeRelease() { logExpanded.value = false; selected.value = null }
+function requestDelete(release: Release) {
+  if (['pending', 'running'].includes(release.status)) return
+  deleteError.value = ''
+  deleteCandidate.value = release
+}
+async function deleteRelease() {
+  if (!deleteCandidate.value) return
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await api.delete(`/releases/${deleteCandidate.value.id}`)
+    if (selected.value?.id === deleteCandidate.value.id) closeRelease()
+    deleteCandidate.value = null
+    await load()
+  } catch (exception:any) {
+    deleteError.value = exception.response?.data?.detail || '发布记录删除失败'
+  } finally {
+    deleting.value = false
+  }
+}
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && logExpanded.value) logExpanded.value = false
 }
@@ -97,11 +120,16 @@ onBeforeUnmount(() => {
   <div class="content compact">
     <div class="hero-row"><div><div class="eyebrow">Delivery history</div><h1>发布记录</h1><p>真实拉取仓库，并通过 SSH 将文件、Docker 或 Docker Compose 工程发布到目标服务器。</p></div><button class="primary-button" @click="openCreate"><Plus />发起发布</button></div>
     <div class="toolbar"><div class="filter-tabs"><button v-for="item in [{k:'all',n:'全部'},{k:'success',n:'成功'},{k:'running',n:'进行中'},{k:'failed',n:'失败'},{k:'simulated',n:'仅模拟'}]" :key="item.k" class="filter-tab" :class="{active:filter===item.k}" @click="filter=item.k">{{ item.n }}</button></div><div class="toolbar-spacer" /><button class="secondary-button" @click="load"><RefreshCw />刷新</button></div>
-    <section class="panel"><div class="pipeline-list"><div v-for="release in visible" :key="release.id" class="pipeline-row" @click="selected=release"><div class="project-cell"><div class="project-glyph" :class="release.project_type">{{ release.project_type.slice(0,4).toUpperCase() }}</div><div><strong>{{ release.project_name }}</strong><span>v{{ release.version }} · {{ release.release_no }}</span></div></div><div><span class="env-pill" :class="{prod:release.environment_name==='生产环境'}">{{ release.environment_name }}</span></div><StatusTrack :stage="release.current_stage" :status="release.status" /><div class="duration">{{ duration(release) }}<span>{{ release.created_by }}</span></div><span>›</span></div><div v-if="!visible.length" class="list-empty">当前筛选条件下没有发布记录。</div></div></section>
+    <section class="panel"><div class="pipeline-list"><div v-for="release in visible" :key="release.id" class="pipeline-row" @click="selected=release"><div class="project-cell"><div class="project-glyph" :class="release.project_type">{{ release.project_type.slice(0,4).toUpperCase() }}</div><div><strong>{{ release.project_name }}</strong><span>v{{ release.version }} · {{ release.release_no }}</span></div></div><div><span class="env-pill" :class="{prod:release.environment_name==='生产环境'}">{{ release.environment_name }}</span></div><StatusTrack :stage="release.current_stage" :status="release.status" /><div class="duration">{{ duration(release) }}<span>{{ release.created_by }}</span></div><div class="pipeline-row-actions"><button class="row-delete-button" :disabled="['pending','running'].includes(release.status)" :title="['pending','running'].includes(release.status)?'进行中的发布不能删除':'删除发布记录'" aria-label="删除发布记录" @click.stop="requestDelete(release)"><Trash2 /></button><span>›</span></div></div><div v-if="!visible.length" class="list-empty">当前筛选条件下没有发布记录。</div></div></section>
 
     <ModalShell v-if="showCreate" title="发起发布" subtitle="创建一条可追踪、可回滚的标准发布" @close="showCreate=false">
       <div class="modal-body"><div class="form-grid"><div class="form-field full"><label>项目 *</label><select :value="form.project_id" @change="selectProject(Number(($event.target as HTMLSelectElement).value))"><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }} · {{ project.deployment_mode==='docker'?'Docker 部署':project.project_type }}</option></select></div><div class="form-field"><label>Git 分支 *</label><input v-model="form.branch" /></div><div class="form-field"><label>版本号 *</label><input v-model="form.version" /></div><div class="form-field"><label>发布到哪个环境</label><select v-model="form.environment_id"><option v-for="environment in environments" :key="environment.id" :value="environment.id">{{ environment.name }}（{{ readyTargetCount(environment.id) }}/{{ targetCount(environment.id) }} 台可用）</option></select></div><div class="form-field"><label>部署策略</label><select v-model="form.strategy"><option value="rolling">逐台发布</option><option value="blue_green" disabled>蓝绿发布（待支持）</option><option value="canary" disabled>灰度发布（待支持）</option></select></div><section class="release-target-preview full" :class="{blocked:!readyTargets.length}"><div class="release-target-head"><div><strong>发布目标预览</strong><span>{{ selectedProject?.name }} · {{ environments.find(item=>item.id===form.environment_id)?.name }}</span></div><b>{{ readyTargets.length }} / {{ selectedTargets.length }} 台可发布</b></div><div v-if="selectedTargets.length" class="release-target-list"><div v-for="target in selectedTargets" :key="target.id"><Server /><div><strong>{{ target.name }}</strong><span>{{ target.address }}:{{ target.port }}</span></div><em :class="{ready:readyTargets.some(item=>item.id===target.id)}">{{ readyTargets.some(item=>item.id===target.id)?'就绪':target.status==='offline'?'连接失败':!target.credential_configured?'未配置凭证':'未测试' }}</em></div></div><div v-else class="release-target-empty"><AlertTriangle /><span>这个项目在所选环境还没有服务器。</span><button class="secondary-button" @click="configureTargets">立即配置服务器</button></div></section><div class="form-field full"><label>发布说明（可选）</label><textarea v-model="form.notes" placeholder="例如：修复登录问题，发布后观察 10 分钟" /></div><div class="security-note full"><Rocket /><div><strong>{{ selectedProject?.deployment_mode==='docker'?'将执行真实 Docker 发布':'将执行真实文件发布' }}</strong><span>{{ selectedProject?.deployment_mode==='docker'?'平台会上传代码到目标服务器，构建镜像、更新容器并检查健康状态。':'平台会构建制品，并只部署到上方显示为“就绪”的目标服务器。' }}</span></div></div><span v-if="error" class="error-text">{{ error }}</span></div></div>
       <div class="modal-foot"><button class="ghost-button" @click="showCreate=false">取消</button><button class="primary-button" :disabled="saving||!readyTargets.length" @click="createRelease"><Rocket />{{ saving?'正在创建...':readyTargets.length?`确认发布到 ${readyTargets.length} 台服务器`:'请先配置可用服务器' }}</button></div>
+    </ModalShell>
+
+    <ModalShell v-if="deleteCandidate" title="删除发布记录" subtitle="此操作不可恢复" size="small" @close="deleteCandidate=null">
+      <div class="modal-body delete-confirm-body"><div class="delete-warning-icon"><AlertTriangle /></div><div><strong>确认删除 {{ deleteCandidate.release_no }}？</strong><p>将删除 {{ deleteCandidate.project_name }} v{{ deleteCandidate.version }} 的发布步骤、服务器结果和全部实时日志，不会操作目标服务器上已经运行的服务。</p><span v-if="deleteError" class="error-text">{{ deleteError }}</span></div></div>
+      <div class="modal-foot"><button class="ghost-button" :disabled="deleting" @click="deleteCandidate=null">取消</button><button class="danger-button" :disabled="deleting" @click="deleteRelease"><Trash2 />{{ deleting?'正在删除...':'确认删除记录' }}</button></div>
     </ModalShell>
 
     <div v-if="selected" class="drawer-wrap" @mousedown.self="closeRelease">
