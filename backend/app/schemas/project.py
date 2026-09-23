@@ -17,6 +17,8 @@ class ProjectBase(BaseModel):
     docker_image_name: str = ""
     docker_container_port: int = 8080
     docker_run_args: str = ""
+    compose_file_path: str = "docker-compose.yml"
+    compose_project_name: str = ""
 
 
 class ProjectCreate(ProjectBase):

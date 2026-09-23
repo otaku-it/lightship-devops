@@ -34,3 +34,19 @@ def test_package_docker_context(tmp_path):
     assert "Dockerfile" in names
     assert "app.txt" in names
     assert ".git/secret" not in names
+
+
+def test_package_compose_context(tmp_path):
+    builder = ArtifactBuilder(tmp_path, log=lambda *_: None)
+    builder.source_dir.mkdir()
+    (builder.source_dir / "docker-compose.yml").write_text(
+        "services:\n  api:\n    build: .\n", encoding="utf-8"
+    )
+    (builder.source_dir / "frontend.js").write_text("console.log('ok')", encoding="utf-8")
+    archive_path, digest, size = builder.package_compose_context("docker-compose.yml")
+    assert size > 0
+    assert len(digest) == 64
+    with tarfile.open(archive_path, "r:gz") as archive:
+        names = archive.getnames()
+    assert "docker-compose.yml" in names
+    assert "frontend.js" in names

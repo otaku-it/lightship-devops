@@ -3,6 +3,7 @@ import hashlib
 import io
 import posixpath
 import re
+import select
 import shlex
 import time
 from pathlib import Path
@@ -97,17 +98,64 @@ class SSHExecutor:
 
     @staticmethod
     def _run(
-        client: paramiko.SSHClient, command: str, timeout: int | None = None
+        client: paramiko.SSHClient,
+        command: str,
+        timeout: int | None = None,
+        on_output=None,
     ) -> tuple[int, str, str]:
         _, stdout, stderr = client.exec_command(
             command, timeout=timeout or settings.ssh_command_timeout_seconds
         )
-        exit_code = stdout.channel.recv_exit_status()
-        return (
-            exit_code,
-            stdout.read().decode(errors="replace").strip(),
-            stderr.read().decode(errors="replace").strip(),
-        )
+        channel = stdout.channel
+        deadline = time.monotonic() + (timeout or settings.ssh_command_timeout_seconds)
+        output = bytearray()
+        error = bytearray()
+        emitted = bytearray()
+        emitted_error = bytearray()
+        last_heartbeat = time.monotonic()
+        while not channel.exit_status_ready():
+            if time.monotonic() >= deadline:
+                channel.close()
+                message = "远程命令执行超时"
+                if on_output:
+                    on_output(message)
+                return 124, output.decode(errors="replace").strip(), message
+            readable, _, _ = select.select([channel], [], [], 1)
+            if not readable:
+                continue
+            while channel.recv_ready():
+                chunk = channel.recv(65536)
+                if not chunk:
+                    break
+                output.extend(chunk)
+            while channel.recv_stderr_ready():
+                chunk = channel.recv_stderr(65536)
+                if not chunk:
+                    break
+                error.extend(chunk)
+            if on_output and output:
+                fresh = output[len(emitted):]
+                emitted.extend(fresh)
+                for line in fresh.decode(errors="replace").splitlines():
+                    if line.strip():
+                        on_output(line.strip()[-2000:])
+                        last_heartbeat = time.monotonic()
+            if on_output and error:
+                fresh_error = error[len(emitted_error):]
+                emitted_error.extend(fresh_error)
+                for line in fresh_error.decode(errors="replace").splitlines():
+                    if line.strip():
+                        on_output(line.strip()[-2000:])
+                        last_heartbeat = time.monotonic()
+            if on_output and time.monotonic() - last_heartbeat >= 15:
+                on_output("远程命令仍在执行，等待 Docker 返回结果…")
+                last_heartbeat = time.monotonic()
+        while channel.recv_ready():
+            output.extend(channel.recv(65536))
+        while channel.recv_stderr_ready():
+            error.extend(channel.recv_stderr(65536))
+        exit_code = channel.recv_exit_status()
+        return exit_code, output.decode(errors="replace").strip(), error.decode(errors="replace").strip()
 
     def test_connection(
         self,
@@ -137,10 +185,13 @@ class SSHExecutor:
             if code != 0:
                 raise RuntimeError(error or "系统信息读取失败")
             message = "SSH 认证、服务器指纹与只读系统检查通过"
-            if target.project and target.project.deployment_mode == "docker":
+            if target.project and target.project.deployment_mode in {"docker", "compose"}:
+                docker_command = "docker version --format 'Docker {{.Server.Version}}' && docker info --format '{{.OSType}}/{{.Architecture}}'"
+                if target.project.deployment_mode == "compose":
+                    docker_command += " && (docker compose version || docker-compose version)"
                 docker_code, docker_output, docker_error = self._run(
                     client,
-                    "docker version --format 'Docker {{.Server.Version}}' && docker info --format '{{.OSType}}/{{.Architecture}}'",
+                    docker_command,
                 )
                 if docker_code != 0:
                     raise RuntimeError(
@@ -148,7 +199,7 @@ class SSHExecutor:
                         f"{docker_error or docker_output}"
                     )
                 output = f"{output} · {docker_output.replace(chr(10), ' ')}"
-                message = "SSH 与 Docker Engine 检查通过，可执行容器部署"
+                message = "SSH、Docker Engine 与 Compose 检查通过，可执行多服务部署" if target.project.deployment_mode == "compose" else "SSH 与 Docker Engine 检查通过，可执行容器部署"
             return ConnectionResult(
                 success=True,
                 latency_ms=int((time.perf_counter() - started) * 1000),
@@ -186,6 +237,7 @@ class SSHExecutor:
         passphrase: str,
         expected_fingerprint: str,
         trust_on_first_use: bool,
+        progress_callback=None,
     ) -> DeploymentResult:
         client = None
         logs: list[str] = []
@@ -280,7 +332,7 @@ class SSHExecutor:
                 f"docker run -d --name {shlex.quote(container_name)} {run_options} {shlex.quote(image_ref)}"
             )
             switched = True
-            code, output, error = self._run(client, replace_command)
+            code, output, error = self._run(client, replace_command, on_output=progress_callback)
             if code != 0:
                 raise RuntimeError(f"启动 Docker 容器失败：{error or output}")
             logs.append(f"容器 {container_name} 已切换到新镜像")
@@ -348,6 +400,7 @@ class SSHExecutor:
         passphrase: str,
         expected_fingerprint: str,
         trust_on_first_use: bool,
+        progress_callback=None,
     ) -> DeploymentResult:
         client = None
         logs: list[str] = []
@@ -444,6 +497,147 @@ class SSHExecutor:
                 previous_path=previous_path,
                 logs=tuple(logs),
             )
+        finally:
+            if client:
+                try:
+                    self._run(client, f"rm -f {shlex.quote(remote_archive)}")
+                except Exception:  # noqa: BLE001
+                    pass
+                client.close()
+
+    def deploy_compose(
+        self,
+        target: DeploymentTarget,
+        *,
+        archive_path: Path,
+        project_name: str,
+        version: str,
+        release_no: str,
+        service_port: int,
+        compose_file_path: str,
+        compose_project_name: str,
+        private_key: str,
+        password: str,
+        passphrase: str,
+        expected_fingerprint: str,
+        trust_on_first_use: bool,
+        progress_callback=None,
+    ) -> DeploymentResult:
+        client = None
+        logs: list[str] = []
+        safe_project = re.sub(r"[^a-zA-Z0-9_.-]+", "-", project_name).strip("-.").lower()
+        safe_version = re.sub(r"[^a-zA-Z0-9_.-]+", "-", version).strip("-.").lower()
+        if not safe_project or not safe_version:
+            raise ValueError("项目名或版本号无法转换为合法 Compose 名称")
+        compose_project = compose_project_name.strip() or f"lightship-{safe_project}"
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", compose_project):
+            raise ValueError("Compose 项目名格式不合法")
+        compose_file = compose_file_path.strip().replace("\\", "/") or "docker-compose.yml"
+        if compose_file.startswith("/") or ".." in compose_file.split("/"):
+            raise ValueError("Compose 文件路径必须是仓库内的相对路径")
+        root_dir = f"/opt/lightship-compose/{safe_project}"
+        context_dir = f"{root_dir}/releases/{safe_version}-{release_no.lower()}"
+        current_link = f"{root_dir}/current"
+        remote_archive = f"/tmp/lightship-compose-{release_no.lower()}.tar.gz"
+        previous_dir = ""
+        compose = ""
+        started_new = False
+        try:
+            client, _ = self._connect(
+                target,
+                private_key=private_key,
+                password=password,
+                passphrase=passphrase,
+                expected_fingerprint=expected_fingerprint,
+                trust_on_first_use=trust_on_first_use,
+            )
+            logs.append("SSH 会话已建立，开始 Docker Compose 部署")
+            code, output, error = self._run(client, "docker info --format '{{.ServerVersion}}' && (docker compose version || docker-compose version)")
+            if code != 0:
+                raise RuntimeError(f"Docker Compose 不可用：{error or output}")
+            logs.append(f"Docker Compose 可用：{output.replace(chr(10), ' ')}")
+            compose_bin = "docker compose" if self._run(client, "docker compose version >/dev/null 2>&1")[0] == 0 else "docker-compose"
+            compose = f"{compose_bin} -p {shlex.quote(compose_project)} -f {shlex.quote(posixpath.join(context_dir, compose_file))}"
+            with client.open_sftp() as sftp:
+                sftp.put(str(archive_path), remote_archive)
+            prepare = (
+                f"mkdir -p {shlex.quote(context_dir)} && "
+                f"tar -xzf {shlex.quote(remote_archive)} -C {shlex.quote(context_dir)}"
+            )
+            code, output, error = self._run(client, prepare)
+            if code != 0:
+                raise RuntimeError(f"解压 Compose 构建上下文失败：{error or output}")
+            logs.append(f"Compose 文件已上传：{compose_file}")
+            code, output, error = self._run(
+                client,
+                f"{compose} config --quiet",
+                timeout=settings.build_timeout_seconds,
+            )
+            if code != 0:
+                raise RuntimeError(f"Compose 配置校验失败：{error or output}")
+            logs.append("Compose 配置校验通过")
+            _, previous_dir, _ = self._run(client, f"readlink -f {shlex.quote(current_link)} 2>/dev/null || true")
+            previous_dir = previous_dir.strip()
+            build_command = f"{compose} build"
+            if progress_callback:
+                progress_callback("开始执行 docker compose build，正在构建前后端及依赖服务")
+            code, output, error = self._run(client, build_command, timeout=settings.build_timeout_seconds, on_output=progress_callback)
+            if (output or error).strip():
+                logs.append((output or error)[-4000:])
+            if code != 0:
+                raise RuntimeError(f"Compose 镜像构建失败：{error or output}")
+            logs.append("Compose 所有服务镜像构建完成")
+            started_new = True
+            if progress_callback:
+                progress_callback("开始执行 docker compose up -d，正在更新多服务")
+            code, output, error = self._run(client, f"{compose} up -d --remove-orphans", timeout=settings.build_timeout_seconds, on_output=progress_callback)
+            if (output or error).strip():
+                logs.append((output or error)[-4000:])
+            if code != 0:
+                raise RuntimeError(f"Compose 服务启动失败：{error or output}")
+            logs.append("Compose 多服务已启动")
+            code, output, error = self._run(client, f"{compose} ps --all", timeout=60, on_output=progress_callback)
+            if code != 0:
+                raise RuntimeError(f"Compose 服务状态检查失败：{error or output}")
+            logs.append(output[-4000:])
+            code, output, error = self._run(client, f"{compose} ps --status running --services", timeout=60, on_output=progress_callback)
+            if code != 0 or not output.strip():
+                raise RuntimeError(f"没有运行中的 Compose 服务：{error or output}")
+            exited_code, exited_services, exited_error = self._run(
+                client, f"{compose} ps --status exited --services", timeout=60, on_output=progress_callback
+            )
+            if exited_code != 0:
+                raise RuntimeError(f"Compose 服务状态检查失败：{exited_error or exited_services}")
+            if exited_services.strip():
+                raise RuntimeError(f"Compose 服务异常退出：{exited_services}")
+            logs.append("Compose 服务状态检查通过")
+            code, output, error = self._run(
+                client,
+                f"mkdir -p {shlex.quote(root_dir)} && rm -f {shlex.quote(current_link)} && ln -s {shlex.quote(context_dir)} {shlex.quote(current_link)}",
+            )
+            if code != 0:
+                raise RuntimeError(f"切换 Compose 当前版本失败：{error or output}")
+            logs.append(f"Compose 当前版本已切换到 {context_dir}")
+            return DeploymentResult(
+                success=True,
+                message="Docker Compose 多服务已更新并启动",
+                deployed_path=context_dir,
+                previous_path=previous_dir,
+                logs=tuple(logs),
+            )
+        except Exception as exc:  # noqa: BLE001
+            if client and compose and started_new:
+                self._run(client, f"{compose} down --remove-orphans", timeout=60)
+                if previous_dir:
+                    previous_compose = f"{compose.split(' -f ', 1)[0]} -f {shlex.quote(posixpath.join(previous_dir, compose_file))}"
+                    rollback_code, rollback_output, rollback_error = self._run(
+                        client, f"{previous_compose} up -d --remove-orphans", timeout=settings.build_timeout_seconds
+                    )
+                    if rollback_code == 0:
+                        logs.append("已回滚到上一版 Compose 服务")
+                    else:
+                        logs.append(f"上一版 Compose 回滚失败：{rollback_error or rollback_output}",)
+            return DeploymentResult(success=False, message=str(exc), deployed_path=context_dir, previous_path=previous_dir, logs=tuple(logs))
         finally:
             if client:
                 try:

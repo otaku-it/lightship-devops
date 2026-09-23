@@ -78,6 +78,12 @@ def run_real_release(db, release: Release, steps: list[ReleaseStep]) -> None:
                 release.id,
                 f"Docker 模式：镜像将在目标服务器根据 {project.dockerfile_path} 构建",
             )
+        elif project.deployment_mode == "compose":
+            append_log(
+                db,
+                release.id,
+                f"Docker Compose 模式：多服务将在目标服务器根据 {project.compose_file_path} 构建并启动",
+            )
         else:
             builder.build(project.build_command)
         set_step(db, release, steps[1], "success")
@@ -86,6 +92,8 @@ def run_real_release(db, release: Release, steps: list[ReleaseStep]) -> None:
         append_log(db, release.id, f"开始：{steps[2].name}")
         if project.deployment_mode == "docker":
             archive_path, _, _ = builder.package_docker_context(project.dockerfile_path)
+        elif project.deployment_mode == "compose":
+            archive_path, _, _ = builder.package_compose_context(project.compose_file_path)
         else:
             archive_path, _, _ = builder.package(project.artifact_pattern)
         set_step(db, release, steps[2], "success")
@@ -161,6 +169,9 @@ def run_real_release(db, release: Release, steps: list[ReleaseStep]) -> None:
                 "passphrase": decrypt_secret(access.passphrase_encrypted),
                 "expected_fingerprint": access.host_key_fingerprint,
                 "trust_on_first_use": access.trust_on_first_use,
+                "progress_callback": lambda line, target_name=target.name: append_log(
+                    db, release.id, f"[{target_name}] {line}"
+                ),
             }
             if project.deployment_mode == "docker":
                 result = executor.deploy_docker(
@@ -170,6 +181,13 @@ def run_real_release(db, release: Release, steps: list[ReleaseStep]) -> None:
                     docker_container_port=project.docker_container_port,
                     docker_run_args=project.docker_run_args,
                     health_check_command=target.health_check_command,
+                    **common_args,
+                )
+            elif project.deployment_mode == "compose":
+                result = executor.deploy_compose(
+                    target,
+                    compose_file_path=project.compose_file_path,
+                    compose_project_name=project.compose_project_name,
                     **common_args,
                 )
             else:

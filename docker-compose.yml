@@ -18,7 +18,11 @@ services:
       retries: 20
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        APT_MIRROR: ${APT_MIRROR:-http://mirrors.aliyun.com}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}
     environment:
       DATABASE_URL: mysql+pymysql://lightship:lightship@mysql:3306/lightship?charset=utf8mb4
       SECRET_KEY: local-development-secret-change-before-production
@@ -27,7 +31,7 @@ services:
       CORS_ORIGINS: http://localhost:5173,http://localhost:8088
       EXECUTOR_MODE: real
       CREDENTIAL_ENCRYPTION_KEY: local-credential-key-change-before-production
-      BUILD_TIMEOUT_SECONDS: 900
+      BUILD_TIMEOUT_SECONDS: ${BUILD_TIMEOUT_SECONDS:-3600}
     ports:
       - "8000:8000"
     depends_on:
@@ -35,7 +39,10 @@ services:
         condition: service_healthy
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     ports:
       - "8088:80"
     depends_on:

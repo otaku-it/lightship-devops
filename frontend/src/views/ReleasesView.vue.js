@@ -80,6 +80,14 @@ function duration(item) {
     const seconds = Math.max(0, Math.floor((end - parseApiDate(item.started_at).getTime()) / 1000));
     return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
 }
+function activeStep(item) { return item.steps.find((step) => step.status === 'running') || item.steps.find((step) => step.status === 'failed') || item.steps.at(-1); }
+function lastLog(item) { return item.logs.at(-1); }
+function waitingMinutes(item) {
+    if (!item.started_at || item.status !== 'running')
+        return 0;
+    return Math.floor(Math.max(0, Date.now() - parseApiDate(item.started_at).getTime()) / 60000);
+}
+function stepLabel(status) { return { running: '执行中', success: '已完成', failed: '失败', simulated: '仅模拟' }[status] || '等待中'; }
 function applyRouteIntent() {
     const projectId = Number(route.query.project_id || 0);
     if (projects.value.some((item) => item.id === projectId))
@@ -458,7 +466,24 @@ if (__VLS_ctx.selected) {
     // @ts-ignore
     const __VLS_39 = __VLS_asFunctionalComponent(__VLS_38, new __VLS_38({}));
     const __VLS_40 = __VLS_39({}, ...__VLS_functionalComponentArgsRest(__VLS_39));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.selected.status === 'success' ? '真实发布成功' : __VLS_ctx.selected.status === 'simulated' ? '仅模拟完成，未操作服务器' : __VLS_ctx.selected.status === 'failed' ? '发布失败' : '发布正在执行');
+    if (__VLS_ctx.selected.status === 'running') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        (__VLS_ctx.activeStep(__VLS_ctx.selected)?.name || '准备执行');
+        (__VLS_ctx.waitingMinutes(__VLS_ctx.selected));
+    }
+    if (__VLS_ctx.selected.status === 'running') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "release-live-summary" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.activeStep(__VLS_ctx.selected)?.name || '准备中');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        (__VLS_ctx.lastLog(__VLS_ctx.selected) ? __VLS_ctx.parseApiDate(__VLS_ctx.lastLog(__VLS_ctx.selected).created_at).toLocaleTimeString('zh-CN') : '暂无');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "detail-section" },
     });
@@ -478,7 +503,8 @@ if (__VLS_ctx.selected) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         (stepItem.name);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
-        (stepItem.status.toUpperCase());
+        (__VLS_ctx.stepLabel(stepItem.status));
+        (stepItem.status === 'running' ? ` · ${__VLS_ctx.duration({ ...__VLS_ctx.selected, started_at: stepItem.started_at })}` : '');
     }
     if (__VLS_ctx.selected.deployments.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -498,9 +524,9 @@ if (__VLS_ctx.selected) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
             (item.target_name);
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-            (item.status === 'success' ? '部署成功' : item.status === 'skipped' ? '已跳过' : '部署失败');
+            (item.status === 'success' ? '部署成功' : item.status === 'skipped' ? '已跳过' : item.status === 'running' ? '部署中' : '部署失败');
             __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-            (item.message);
+            (item.message || (item.status === 'running' ? '已连接目标服务器，正在执行远程命令...' : ''));
             if (item.deployed_path) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
                 (item.deployed_path);
@@ -511,6 +537,10 @@ if (__VLS_ctx.selected) {
         ...{ class: "detail-section" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h4, __VLS_intrinsicElements.h4)({});
+    if (__VLS_ctx.selected.logs.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+        (__VLS_ctx.selected.logs.length);
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "terminal detail-terminal" },
     });
@@ -519,6 +549,8 @@ if (__VLS_ctx.selected) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     (__VLS_ctx.selected.release_no);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    (__VLS_ctx.lastLog(__VLS_ctx.selected) ? __VLS_ctx.parseApiDate(__VLS_ctx.lastLog(__VLS_ctx.selected).created_at).toLocaleTimeString('zh-CN') : '--');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "terminal-body" },
     });
@@ -594,6 +626,7 @@ if (__VLS_ctx.selected) {
 /** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['drawer-body']} */ ;
 /** @type {__VLS_StyleScopedClasses['detail-status']} */ ;
+/** @type {__VLS_StyleScopedClasses['release-live-summary']} */ ;
 /** @type {__VLS_StyleScopedClasses['detail-section']} */ ;
 /** @type {__VLS_StyleScopedClasses['detail-stage-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['detail-stage']} */ ;
@@ -643,6 +676,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             configureTargets: configureTargets,
             createRelease: createRelease,
             duration: duration,
+            activeStep: activeStep,
+            lastLog: lastLog,
+            waitingMinutes: waitingMinutes,
+            stepLabel: stepLabel,
         };
     },
 });

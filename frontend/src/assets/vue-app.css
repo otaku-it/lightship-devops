@@ -15,6 +15,11 @@ button:disabled { opacity: .6; cursor: not-allowed; transform: none !important; 
 .release-drawer { width: 540px; }
 .detail-status.running { color: #9b6715; background: #fff8e9; }
 .detail-status.failed { color: #b33f37; background: #fff1ef; }
+.detail-status > div { display: grid; gap: 3px; }
+.detail-status strong, .detail-status span { display: block; }
+.detail-status span { color: var(--muted); font-size: 9px; }
+.release-live-summary { display: grid; gap: 5px; margin: 10px 0; padding: 10px 12px; border: 1px solid #cfe8d7; border-radius: 8px; background: #f5fbf6; color: var(--muted); font-size: 9px; }
+.release-live-summary strong { color: var(--accent-deep); font-size: 10px; }
 .detail-stage-list { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
 .detail-stage { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .detail-stage:last-child { border-bottom: 0; }

@@ -15,13 +15,18 @@ router = APIRouter(prefix="/projects", tags=["项目"])
 
 
 def validate_project(payload: ProjectCreate) -> None:
-    if payload.deployment_mode not in {"file", "docker"}:
-        raise HTTPException(status_code=422, detail="部署方式只支持 file 或 docker")
+    if payload.deployment_mode not in {"file", "docker", "compose"}:
+        raise HTTPException(status_code=422, detail="部署方式只支持 file、docker 或 compose")
     if payload.deployment_mode == "docker":
         if not payload.dockerfile_path.strip():
             raise HTTPException(status_code=422, detail="Docker 部署必须配置 Dockerfile 路径")
         if payload.docker_container_port < 1 or payload.docker_container_port > 65535:
             raise HTTPException(status_code=422, detail="容器端口必须在 1-65535 之间")
+    if payload.deployment_mode == "compose":
+        if not payload.compose_file_path.strip():
+            raise HTTPException(status_code=422, detail="Compose 部署必须配置 Compose 文件路径")
+        if payload.compose_project_name and not payload.compose_project_name.replace("-", "").replace("_", "").isalnum():
+            raise HTTPException(status_code=422, detail="Compose 项目名只能包含字母、数字、下划线和短横线")
 
 
 def project_read(project: Project, db: Session) -> ProjectRead:

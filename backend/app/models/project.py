@@ -22,6 +22,8 @@ class Project(TimestampMixin, Base):
     docker_image_name: Mapped[str] = mapped_column(String(255), default="")
     docker_container_port: Mapped[int] = mapped_column(default=8080)
     docker_run_args: Mapped[str] = mapped_column(String(1000), default="")
+    compose_file_path: Mapped[str] = mapped_column(String(255), default="docker-compose.yml")
+    compose_project_name: Mapped[str] = mapped_column(String(100), default="")
 
     releases = relationship("Release", back_populates="project")
     targets = relationship("DeploymentTarget", back_populates="project")

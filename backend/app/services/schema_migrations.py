@@ -20,6 +20,8 @@ def run_schema_migrations(engine: Engine) -> None:
         "docker_image_name": "VARCHAR(255) NOT NULL DEFAULT ''",
         "docker_container_port": "INTEGER NOT NULL DEFAULT 8080",
         "docker_run_args": "VARCHAR(1000) NOT NULL DEFAULT ''",
+        "compose_file_path": "VARCHAR(255) NOT NULL DEFAULT 'docker-compose.yml'",
+        "compose_project_name": "VARCHAR(100) NOT NULL DEFAULT ''",
     }
     with engine.begin() as connection:
         for name, definition in additions.items():

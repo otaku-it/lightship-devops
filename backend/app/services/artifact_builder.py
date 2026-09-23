@@ -187,3 +187,27 @@ class ArtifactBuilder:
             "SUCCESS",
         )
         return self.archive_path, digest, size
+
+    def package_compose_context(self, compose_file_path: str) -> tuple[Path, str, int]:
+        normalized = compose_file_path.strip().replace("\\", "/") or "docker-compose.yml"
+        compose_file = (self.source_dir / normalized).resolve()
+        if self.source_dir.resolve() not in compose_file.parents:
+            raise ValueError("Compose 文件必须位于项目仓库内")
+        if not compose_file.is_file():
+            raise FileNotFoundError(f"没有找到 Compose 文件：{normalized}")
+        excluded = {".git", ".idea", ".vscode", "node_modules", "__pycache__"}
+        files = sorted(
+            item for item in self.source_dir.rglob("*")
+            if item.is_file()
+            and not any(part in excluded for part in item.relative_to(self.source_dir).parts)
+        )
+        with tarfile.open(self.archive_path, "w:gz") as archive:
+            for item in files:
+                archive.add(item, arcname=item.relative_to(self.source_dir))
+        digest = hashlib.sha256(self.archive_path.read_bytes()).hexdigest()
+        size = self.archive_path.stat().st_size
+        self.log(
+            f"Docker Compose 构建上下文已打包：{len(files)} 个文件，{size} bytes，SHA-256 {digest}",
+            "SUCCESS",
+        )
+        return self.archive_path, digest, size

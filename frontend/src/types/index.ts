@@ -2,17 +2,19 @@ export interface Project {
   id: number
   name: string
   description: string
-  project_type: 'java' | 'frontend' | 'python'
+  project_type: 'java' | 'frontend' | 'python' | 'fullstack'
   repository_url: string
   default_branch: string
   build_command: string
   artifact_pattern: string
   health_path: string
-  deployment_mode: 'file' | 'docker'
+  deployment_mode: 'file' | 'docker' | 'compose'
   dockerfile_path: string
   docker_image_name: string
   docker_container_port: number
   docker_run_args: string
+  compose_file_path: string
+  compose_project_name: string
   created_at: string
   release_count: number
   success_rate: number

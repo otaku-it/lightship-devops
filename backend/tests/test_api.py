@@ -116,3 +116,35 @@ def test_create_docker_project(client, auth_headers):
     assert body["deployment_mode"] == "docker"
     assert body["dockerfile_path"] == "deploy/Dockerfile"
     assert body["docker_container_port"] == 8080
+
+
+def test_create_compose_project(client, auth_headers):
+    payload = {
+        "name": "full-stack-compose",
+        "description": "frontend and backend services",
+        "project_type": "frontend",
+        "repository_url": "https://git.example.com/team/full-stack.git",
+        "default_branch": "main",
+        "deployment_mode": "compose",
+        "compose_file_path": "deploy/docker-compose.yml",
+        "compose_project_name": "full-stack",
+    }
+    response = client.post("/api/v1/projects", headers=auth_headers, json=payload)
+    assert response.status_code == 201
+    body = response.json()
+    assert body["deployment_mode"] == "compose"
+    assert body["compose_file_path"] == "deploy/docker-compose.yml"
+    assert body["compose_project_name"] == "full-stack"
+
+
+def test_reject_invalid_compose_project_name(client, auth_headers):
+    payload = {
+        "name": "invalid-compose-name",
+        "project_type": "frontend",
+        "repository_url": "https://git.example.com/team/full-stack.git",
+        "deployment_mode": "compose",
+        "compose_file_path": "docker-compose.yml",
+        "compose_project_name": "bad name",
+    }
+    response = client.post("/api/v1/projects", headers=auth_headers, json=payload)
+    assert response.status_code == 422

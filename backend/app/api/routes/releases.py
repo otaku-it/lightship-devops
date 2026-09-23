@@ -101,6 +101,8 @@ def create_release(
     step_names = (
         ["拉取代码", "校验 Docker 配置", "打包构建上下文", "构建镜像并更新容器"]
         if project.deployment_mode == "docker"
+        else ["拉取代码", "校验 Compose 配置", "打包 Compose 上下文", "更新 Compose 服务"]
+        if project.deployment_mode == "compose"
         else ["拉取代码", "构建与测试", "生成制品", "部署并验证"]
     )
     for sequence, name in enumerate(step_names, start=1):

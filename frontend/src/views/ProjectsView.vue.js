@@ -12,12 +12,13 @@ const editingId = ref(null);
 const saving = ref(false);
 const error = ref('');
 const router = useRouter();
-const form = reactive({ name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', git_username: '', git_token: '' });
-const visible = computed(() => projects.value.filter((item) => (filter.value === 'all' || (filter.value === 'docker' ? item.deployment_mode === 'docker' : item.project_type === filter.value)) && `${item.name}${item.description}`.toLowerCase().includes(search.value.toLowerCase())));
+const form = reactive({ name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' });
+const visible = computed(() => projects.value.filter((item) => (filter.value === 'all' || (filter.value === 'docker' ? item.deployment_mode === 'docker' : filter.value === 'compose' ? item.deployment_mode === 'compose' : item.project_type === filter.value)) && `${item.name}${item.description}`.toLowerCase().includes(search.value.toLowerCase())));
 const templates = {
     java: { build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health' },
     frontend: { build_command: 'npm ci && npm run build', artifact_pattern: 'dist/**', health_path: '/' },
     python: { build_command: 'pip wheel . -w dist', artifact_pattern: 'dist/*.whl', health_path: '/health' },
+    fullstack: { build_command: '', artifact_pattern: '', health_path: '/health' },
 };
 async function load() {
     const [projectResult, targetResult] = await Promise.all([api.get('/projects'), api.get('/targets')]);
@@ -28,10 +29,14 @@ function projectTargets(projectId) { return targets.value.filter((item) => item.
 function readyTargetCount(projectId) { return projectTargets(projectId).filter((item) => item.connection_type === 'ssh' && item.status === 'online' && item.credential_configured).length; }
 function configureTargets(projectId) { router.push(`/environments?project_id=${projectId}&create=1`); }
 function releaseProject(projectId) { router.push(`/releases?create=1&project_id=${projectId}`); }
-function applyTemplate() { Object.assign(form, templates[form.project_type]); }
+function applyTemplate() {
+    Object.assign(form, templates[form.project_type]);
+    if (form.project_type === 'fullstack')
+        form.deployment_mode = 'compose';
+}
 function openCreate() {
     editingId.value = null;
-    Object.assign(form, { name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', git_username: '', git_token: '' });
+    Object.assign(form, { name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' });
     applyTemplate();
     showCreate.value = true;
 }
@@ -39,6 +44,8 @@ function openDockerCreate() {
     openCreate();
     form.deployment_mode = 'docker';
 }
+function deploymentName(project) { return project.deployment_mode === 'compose' ? 'Compose' : project.deployment_mode === 'docker' ? 'Docker' : '文件'; }
+function deploymentDetail(project) { return project.deployment_mode === 'compose' ? `Compose: ${project.compose_file_path}` : project.deployment_mode === 'docker' ? `Dockerfile: ${project.dockerfile_path}` : project.credential_configured ? 'Git 凭证已配置' : '公开仓库 / 未配置凭证'; }
 function openEdit(project) {
     editingId.value = project.id;
     Object.assign(form, { ...project, git_token: '' });
@@ -126,7 +133,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "filter-tabs" },
 });
-for (const [item] of __VLS_getVForSourceType(([{ k: 'all', n: '全部' }, { k: 'java', n: 'Java' }, { k: 'frontend', n: 'Frontend' }, { k: 'python', n: 'Python' }, { k: 'docker', n: 'Docker' }]))) {
+for (const [item] of __VLS_getVForSourceType(([{ k: 'all', n: '全部' }, { k: 'java', n: 'Java' }, { k: 'frontend', n: 'Frontend' }, { k: 'python', n: 'Python' }, { k: 'docker', n: 'Docker' }, { k: 'compose', n: 'Compose' }]))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 __VLS_ctx.filter = item.k;
@@ -162,9 +169,9 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "project-glyph" },
-        ...{ class: (project.deployment_mode === 'docker' ? 'docker' : project.project_type) },
+        ...{ class: (project.deployment_mode !== 'file' ? 'docker' : project.project_type) },
     });
-    (project.deployment_mode === 'docker' ? 'DOCK' : project.project_type.slice(0, 4).toUpperCase());
+    (project.deployment_mode === 'compose' ? 'COMP' : project.deployment_mode === 'docker' ? 'DOCK' : project.project_type.slice(0, 4).toUpperCase());
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 __VLS_ctx.openEdit(project);
@@ -213,7 +220,7 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-    (project.deployment_mode === 'docker' ? 'Docker' : '文件');
+    (__VLS_ctx.deploymentName(project));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "project-card-foot" },
     });
@@ -233,7 +240,7 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
         ...{ class: "health-dot" },
         ...{ class: ({ warn: project.repository_url.startsWith('https') && !project.credential_configured }) },
     });
-    (project.deployment_mode === 'docker' ? `Dockerfile: ${project.dockerfile_path}` : (project.credential_configured ? 'Git 凭证已配置' : '公开仓库 / 未配置凭证'));
+    (__VLS_ctx.deploymentDetail(project));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "project-quick-actions" },
     });
@@ -309,6 +316,9 @@ if (__VLS_ctx.showCreate) {
         value: (__VLS_ctx.form.project_type),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+        value: "fullstack",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
         value: "java",
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
@@ -353,6 +363,21 @@ if (__VLS_ctx.showCreate) {
     // @ts-ignore
     const __VLS_40 = __VLS_asFunctionalComponent(__VLS_39, new __VLS_39({}));
     const __VLS_41 = __VLS_40({}, ...__VLS_functionalComponentArgsRest(__VLS_40));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.showCreate))
+                    return;
+                __VLS_ctx.form.deployment_mode = 'compose';
+            } },
+        type: "button",
+        ...{ class: ({ active: __VLS_ctx.form.deployment_mode === 'compose' }) },
+    });
+    const __VLS_43 = {}.Container;
+    /** @type {[typeof __VLS_components.Container, ]} */ ;
+    // @ts-ignore
+    const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({}));
+    const __VLS_45 = __VLS_44({}, ...__VLS_functionalComponentArgsRest(__VLS_44));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full" },
     });
@@ -388,7 +413,7 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({});
         (__VLS_ctx.form.health_path);
     }
-    else {
+    else if (__VLS_ctx.form.deployment_mode === 'docker') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "form-field" },
         });
@@ -429,11 +454,42 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full docker-note" },
         });
-        const __VLS_43 = {}.Container;
+        const __VLS_47 = {}.Container;
         /** @type {[typeof __VLS_components.Container, ]} */ ;
         // @ts-ignore
-        const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({}));
-        const __VLS_45 = __VLS_44({}, ...__VLS_functionalComponentArgsRest(__VLS_44));
+        const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({}));
+        const __VLS_49 = __VLS_48({}, ...__VLS_functionalComponentArgsRest(__VLS_48));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-field" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            placeholder: "docker-compose.yml",
+        });
+        (__VLS_ctx.form.compose_file_path);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-field" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            placeholder: (`lightship-${__VLS_ctx.form.name || 'project'}`),
+        });
+        (__VLS_ctx.form.compose_project_name);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "security-note full docker-note" },
+        });
+        const __VLS_51 = {}.Container;
+        /** @type {[typeof __VLS_components.Container, ]} */ ;
+        // @ts-ignore
+        const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
+        const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -458,11 +514,11 @@ if (__VLS_ctx.showCreate) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "security-note full" },
     });
-    const __VLS_47 = {}.ShieldCheck;
+    const __VLS_55 = {}.ShieldCheck;
     /** @type {[typeof __VLS_components.ShieldCheck, ]} */ ;
     // @ts-ignore
-    const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({}));
-    const __VLS_49 = __VLS_48({}, ...__VLS_functionalComponentArgsRest(__VLS_48));
+    const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
+    const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -505,11 +561,11 @@ if (__VLS_ctx.showCreate) {
         ...{ class: "primary-button" },
         disabled: (__VLS_ctx.saving),
     });
-    const __VLS_51 = {}.Server;
+    const __VLS_59 = {}.Server;
     /** @type {[typeof __VLS_components.Server, ]} */ ;
     // @ts-ignore
-    const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
-    const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
+    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
+    const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
     (__VLS_ctx.saving ? '正在保存...' : '保存并配置服务器');
     var __VLS_34;
 }
@@ -561,6 +617,7 @@ if (__VLS_ctx.showCreate) {
 /** @type {__VLS_StyleScopedClasses['deployment-mode-choice']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
@@ -575,6 +632,11 @@ if (__VLS_ctx.showCreate) {
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
+/** @type {__VLS_StyleScopedClasses['security-note']} */ ;
+/** @type {__VLS_StyleScopedClasses['full']} */ ;
+/** @type {__VLS_StyleScopedClasses['docker-note']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['security-note']} */ ;
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['docker-note']} */ ;
@@ -616,6 +678,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             applyTemplate: applyTemplate,
             openCreate: openCreate,
             openDockerCreate: openDockerCreate,
+            deploymentName: deploymentName,
+            deploymentDetail: deploymentDetail,
             openEdit: openEdit,
             saveProject: saveProject,
         };
