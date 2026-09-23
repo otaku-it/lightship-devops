@@ -6,13 +6,14 @@ import re
 import select
 import shlex
 import time
+from datetime import datetime
 from pathlib import Path
 
 import paramiko
 
 from app.core.config import settings
 from app.models.environment import DeploymentTarget
-from app.services.executors.base import ConnectionResult, DeploymentResult
+from app.services.executors.base import ConnectionResult, DeploymentResult, ServiceControlResult, ServiceStatusResult
 
 
 def fingerprint(key: paramiko.PKey) -> str:
@@ -214,6 +215,158 @@ class SSHExecutor:
                 message=f"SSH 连接失败：{exc}",
                 host_key_fingerprint=observed,
             )
+        finally:
+            if client:
+                client.close()
+
+    def check_service_status(
+        self,
+        target: DeploymentTarget,
+        *,
+        project_name: str,
+        deployment_mode: str,
+        version: str = "",
+        release_no: str = "",
+        deployed_path: str = "",
+        docker_container_port: int = 0,
+        compose_project_name: str = "",
+        private_key: str = "",
+        password: str = "",
+        passphrase: str = "",
+        expected_fingerprint: str = "",
+        trust_on_first_use: bool = False,
+        service_port: int = 0,
+    ) -> ServiceStatusResult:
+        client = None
+        started = time.perf_counter()
+        checked_at = datetime.utcnow()
+        safe_project = re.sub(r"[^a-zA-Z0-9_.-]+", "-", project_name).strip("-.").lower()
+        runtime = {"docker": "Docker", "compose": "Docker Compose", "file": "文件 / 进程"}.get(deployment_mode, deployment_mode)
+        try:
+            client, _ = self._connect(
+                target,
+                private_key=private_key,
+                password=password,
+                passphrase=passphrase,
+                expected_fingerprint=expected_fingerprint,
+                trust_on_first_use=trust_on_first_use,
+            )
+            detail = ""
+            if deployment_mode == "docker":
+                container_name = f"lightship-{safe_project}-{target.id}"
+                command = (
+                    f"docker inspect -f '{{{{.State.Status}}}}|{{{{if .State.Health}}}}{{{{.State.Health.Status}}}}{{{{else}}}}none{{{{end}}}}|"
+                    f"{{{{.Config.Image}}}}|{{{{.State.StartedAt}}}}' {shlex.quote(container_name)}"
+                )
+                code, output, error = self._run(client, command, timeout=20)
+                if code != 0:
+                    return ServiceStatusResult(status="stopped", healthy=False, message="容器未运行或不存在", detail=(error or output)[-2000:], version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+                state, health, image, started_at = (output.split("|", 3) + ["", "", "", ""])[:4]
+                detail = f"容器 {container_name} · 镜像 {image} · 启动时间 {started_at}"
+                if state != "running":
+                    return ServiceStatusResult(status="stopped", healthy=False, message=f"容器状态：{state}", detail=detail, version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+                if health == "unhealthy":
+                    return ServiceStatusResult(status="unhealthy", healthy=False, message="容器健康检查异常", detail=detail, version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+                variables = {"project": project_name, "version": version, "release_no": release_no, "service_port": service_port, "port": service_port, "container_port": docker_container_port, "container_name": container_name, "image": image}
+                health_command = render_template(target.health_check_command, variables) if target.health_check_command else ""
+                if health_command:
+                    health_code, health_output, health_error = self._run(client, health_command, timeout=30)
+                    if health_code != 0:
+                        return ServiceStatusResult(status="unhealthy", healthy=False, message="容器运行中，但应用健康检查失败", detail=(health_error or health_output or detail)[-2000:], version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+                message = "容器运行正常，应用健康检查通过" if health_command else "容器运行正常"
+            elif deployment_mode == "compose":
+                compose_project = compose_project_name.strip() or f"lightship-{safe_project}"
+                command = (
+                    "docker ps -a --filter " + shlex.quote(f"label=com.docker.compose.project={compose_project}") +
+                    " --format '{{.Names}}|{{.State}}|{{.Status}}|{{.Image}}'"
+                )
+                code, output, error = self._run(client, command, timeout=20)
+                if code != 0:
+                    raise RuntimeError(error or output or "Docker Compose 状态读取失败")
+                lines = [line for line in output.splitlines() if line.strip()]
+                if not lines:
+                    return ServiceStatusResult(status="stopped", healthy=False, message="未找到 Compose 服务", detail=f"Compose 项目：{compose_project}", version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+                stopped = [line.split("|", 1)[0] for line in lines if "|running|" not in line]
+                unhealthy = [line.split("|", 1)[0] for line in lines if "unhealthy" in line.lower()]
+                detail = "\n".join(lines)[-4000:]
+                if stopped:
+                    return ServiceStatusResult(status="stopped", healthy=False, message=f"{len(stopped)} 个服务未运行：{'、'.join(stopped)}", detail=detail, version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+                if unhealthy:
+                    return ServiceStatusResult(status="unhealthy", healthy=False, message=f"{len(unhealthy)} 个服务健康异常：{'、'.join(unhealthy)}", detail=detail, version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+                message = f"Compose 的 {len(lines)} 个服务均在运行"
+            else:
+                variables = {"project": project_name, "version": version, "release_no": release_no, "service_port": service_port, "port": service_port, "deploy_path": deployed_path, "current_path": posixpath.join(posixpath.dirname(posixpath.dirname(deployed_path.rstrip("/"))), "current") if deployed_path else ""}
+                if not target.health_check_command:
+                    return ServiceStatusResult(status="unknown", healthy=False, message="未配置健康检查命令", detail="请在目标服务器配置中填写健康检查命令", version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+                command = render_template(target.health_check_command, variables)
+                code, output, error = self._run(client, command, timeout=30)
+                if code != 0:
+                    return ServiceStatusResult(status="unhealthy", healthy=False, message="进程健康检查失败", detail=(error or output)[-2000:], version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+                detail = output[-2000:]
+                message = "服务健康检查通过"
+            return ServiceStatusResult(status="running", healthy=True, message=message, detail=detail, version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+        except Exception as exc:  # noqa: BLE001
+            return ServiceStatusResult(status="unreachable", healthy=False, message="无法读取服务状态", detail=str(exc)[-2000:], version=version, release_no=release_no, runtime=runtime, latency_ms=int((time.perf_counter()-started)*1000), checked_at=checked_at)
+        finally:
+            if client:
+                client.close()
+
+    def control_service(
+        self,
+        target: DeploymentTarget,
+        *,
+        action: str,
+        project_name: str,
+        deployment_mode: str,
+        stop_command: str = "",
+        start_command: str = "",
+        compose_file_path: str = "docker-compose.yml",
+        compose_project_name: str = "",
+        private_key: str = "",
+        password: str = "",
+        passphrase: str = "",
+        expected_fingerprint: str = "",
+        trust_on_first_use: bool = False,
+        service_port: int = 0,
+    ) -> ServiceControlResult:
+        client = None
+        started = time.perf_counter()
+        safe_project = re.sub(r"[^a-zA-Z0-9_.-]+", "-", project_name).strip("-.").lower()
+        if deployment_mode not in {"file", "docker", "compose"}:
+            return ServiceControlResult(False, "不支持的部署方式", deployment_mode)
+        try:
+            client, _ = self._connect(
+                target,
+                private_key=private_key,
+                password=password,
+                passphrase=passphrase,
+                expected_fingerprint=expected_fingerprint,
+                trust_on_first_use=trust_on_first_use,
+            )
+            if action not in {"stop", "start", "restart"}:
+                raise ValueError("服务控制动作不合法")
+            if deployment_mode == "docker":
+                container_name = f"lightship-{safe_project}-{target.id}"
+                command = f"docker {action} {shlex.quote(container_name)}"
+            elif deployment_mode == "compose":
+                compose_project = compose_project_name.strip() or f"lightship-{safe_project}"
+                current_file = f"/opt/lightship-compose/{safe_project}/current/{compose_file_path.strip() or 'docker-compose.yml'}"
+                compose_bin = "docker compose" if self._run(client, "docker compose version >/dev/null 2>&1", timeout=15)[0] == 0 else "docker-compose"
+                compose = f"{compose_bin} -p {shlex.quote(compose_project)} -f {shlex.quote(current_file)}"
+                command = f"{compose} {action}"
+            else:
+                variables = {"project": project_name, "service_port": service_port, "port": service_port}
+                command_template = stop_command if action == "stop" else start_command
+                if not command_template.strip():
+                    raise ValueError("未配置服务控制命令")
+                command = render_template(command_template, variables)
+            code, output, error = self._run(client, command, timeout=120)
+            detail = (output or error).strip()[-2000:]
+            if code != 0:
+                return ServiceControlResult(False, f"服务{ {'stop':'暂停','start':'启用','restart':'重启'}[action] }失败", detail, int((time.perf_counter() - started) * 1000))
+            return ServiceControlResult(True, f"服务已{ {'stop':'暂停','start':'启用','restart':'重启'}[action] }", detail, int((time.perf_counter() - started) * 1000))
+        except Exception as exc:  # noqa: BLE001
+            return ServiceControlResult(False, "服务控制失败", str(exc)[-2000:], int((time.perf_counter() - started) * 1000))
         finally:
             if client:
                 client.close()

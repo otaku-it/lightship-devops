@@ -19,6 +19,7 @@ const logExpanded = ref(false)
 const deleteCandidate = ref<Release | null>(null)
 const deleting = ref(false)
 const deleteError = ref('')
+const refreshingLogs = ref(false)
 const saving = ref(false)
 const error = ref('')
 const route = useRoute()
@@ -94,6 +95,18 @@ async function deleteRelease() {
     deleting.value = false
   }
 }
+async function refreshSelectedRelease() {
+  if (!selected.value || refreshingLogs.value) return
+  refreshingLogs.value = true
+  try {
+    const { data } = await api.get(`/releases/${selected.value.id}`)
+    const index = releases.value.findIndex((item) => item.id === data.id)
+    if (index >= 0) releases.value[index] = data
+    selected.value = data
+  } finally {
+    refreshingLogs.value = false
+  }
+}
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && logExpanded.value) logExpanded.value = false
 }
@@ -101,6 +114,8 @@ function applyRouteIntent() {
   const projectId = Number(route.query.project_id || 0)
   if (projects.value.some((item) => item.id === projectId)) selectProject(projectId)
   if (route.query.create) openCreate()
+  const releaseId = Number(route.query.release_id || 0)
+  if (releaseId) selected.value = releases.value.find((item) => item.id === releaseId) || null
 }
 watch(() => route.query, () => { if (projects.value.length) applyRouteIntent() })
 watch(selected, (value) => { if (!value) logExpanded.value = false })
@@ -153,6 +168,7 @@ onBeforeUnmount(() => {
                 <span>{{ selected.release_no }} / live logs</span>
                 <div class="terminal-head-actions">
                   <span>{{ lastLog(selected) ? parseApiDate(lastLog(selected)!.created_at).toLocaleTimeString('zh-CN') : '--' }}</span>
+                  <button class="terminal-refresh-button" :class="{spinning:refreshingLogs}" :disabled="refreshingLogs" title="刷新日志" aria-label="刷新日志" @click="refreshSelectedRelease"><RefreshCw /></button>
                   <button class="terminal-expand-button" title="放大查看日志" aria-label="放大查看日志" @click="logExpanded=true"><Maximize2 /></button>
                 </div>
               </div>
@@ -168,7 +184,7 @@ onBeforeUnmount(() => {
         <section class="log-viewer" role="dialog" aria-modal="true" aria-label="发布实时日志">
           <header class="log-viewer-head">
             <div><h3>{{ selected.release_no }} 实时日志</h3><p>{{ selected.project_name }} · v{{ selected.version }} · {{ selected.logs.length }} 条</p></div>
-            <div class="log-viewer-meta"><span>最后更新 {{ lastLog(selected) ? parseApiDate(lastLog(selected)!.created_at).toLocaleTimeString('zh-CN') : '--' }}</span><button aria-label="退出放大查看" title="退出放大查看" @click="logExpanded=false"><X /></button></div>
+            <div class="log-viewer-meta"><button class="log-refresh-button" :class="{spinning:refreshingLogs}" :disabled="refreshingLogs" aria-label="刷新日志" title="刷新日志" @click="refreshSelectedRelease"><RefreshCw /></button><span>最后更新 {{ lastLog(selected) ? parseApiDate(lastLog(selected)!.created_at).toLocaleTimeString('zh-CN') : '--' }}</span><button aria-label="退出放大查看" title="退出放大查看" @click="logExpanded=false"><X /></button></div>
           </header>
           <div class="terminal log-viewer-terminal">
             <div class="terminal-body"><div v-for="log in selected.logs" :key="log.id" class="log-line"><span class="log-time">{{ parseApiDate(log.created_at).toLocaleTimeString('zh-CN') }}</span><span :class="{'log-ok':log.level==='SUCCESS','log-warn':['ERROR','WARNING'].includes(log.level)}">{{ log.level.padEnd(7) }} {{ log.message }}</span></div><span v-if="!selected.logs.length">等待执行器输出...</span></div>

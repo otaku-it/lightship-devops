@@ -16,6 +16,7 @@ const logExpanded = ref(false);
 const deleteCandidate = ref(null);
 const deleting = ref(false);
 const deleteError = ref('');
+const refreshingLogs = ref(false);
 const saving = ref(false);
 const error = ref('');
 const route = useRoute();
@@ -118,6 +119,21 @@ async function deleteRelease() {
         deleting.value = false;
     }
 }
+async function refreshSelectedRelease() {
+    if (!selected.value || refreshingLogs.value)
+        return;
+    refreshingLogs.value = true;
+    try {
+        const { data } = await api.get(`/releases/${selected.value.id}`);
+        const index = releases.value.findIndex((item) => item.id === data.id);
+        if (index >= 0)
+            releases.value[index] = data;
+        selected.value = data;
+    }
+    finally {
+        refreshingLogs.value = false;
+    }
+}
 function handleKeydown(event) {
     if (event.key === 'Escape' && logExpanded.value)
         logExpanded.value = false;
@@ -128,6 +144,9 @@ function applyRouteIntent() {
         selectProject(projectId);
     if (route.query.create)
         openCreate();
+    const releaseId = Number(route.query.release_id || 0);
+    if (releaseId)
+        selected.value = releases.value.find((item) => item.id === releaseId) || null;
 }
 watch(() => route.query, () => { if (projects.value.length)
     applyRouteIntent(); });
@@ -683,6 +702,19 @@ if (__VLS_ctx.selected) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     (__VLS_ctx.lastLog(__VLS_ctx.selected) ? __VLS_ctx.parseApiDate(__VLS_ctx.lastLog(__VLS_ctx.selected).created_at).toLocaleTimeString('zh-CN') : '--');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.refreshSelectedRelease) },
+        ...{ class: "terminal-refresh-button" },
+        ...{ class: ({ spinning: __VLS_ctx.refreshingLogs }) },
+        disabled: (__VLS_ctx.refreshingLogs),
+        title: "刷新日志",
+        'aria-label': "刷新日志",
+    });
+    const __VLS_61 = {}.RefreshCw;
+    /** @type {[typeof __VLS_components.RefreshCw, ]} */ ;
+    // @ts-ignore
+    const __VLS_62 = __VLS_asFunctionalComponent(__VLS_61, new __VLS_61({}));
+    const __VLS_63 = __VLS_62({}, ...__VLS_functionalComponentArgsRest(__VLS_62));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.selected))
                     return;
@@ -692,11 +724,11 @@ if (__VLS_ctx.selected) {
         title: "放大查看日志",
         'aria-label': "放大查看日志",
     });
-    const __VLS_61 = {}.Maximize2;
+    const __VLS_65 = {}.Maximize2;
     /** @type {[typeof __VLS_components.Maximize2, ]} */ ;
     // @ts-ignore
-    const __VLS_62 = __VLS_asFunctionalComponent(__VLS_61, new __VLS_61({}));
-    const __VLS_63 = __VLS_62({}, ...__VLS_functionalComponentArgsRest(__VLS_62));
+    const __VLS_66 = __VLS_asFunctionalComponent(__VLS_65, new __VLS_65({}));
+    const __VLS_67 = __VLS_66({}, ...__VLS_functionalComponentArgsRest(__VLS_66));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "terminal-body" },
     });
@@ -719,16 +751,16 @@ if (__VLS_ctx.selected) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     }
 }
-const __VLS_65 = {}.Teleport;
+const __VLS_69 = {}.Teleport;
 /** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
 // @ts-ignore
-const __VLS_66 = __VLS_asFunctionalComponent(__VLS_65, new __VLS_65({
+const __VLS_70 = __VLS_asFunctionalComponent(__VLS_69, new __VLS_69({
     to: "body",
 }));
-const __VLS_67 = __VLS_66({
+const __VLS_71 = __VLS_70({
     to: "body",
-}, ...__VLS_functionalComponentArgsRest(__VLS_66));
-__VLS_68.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_70));
+__VLS_72.slots.default;
 if (__VLS_ctx.logExpanded && __VLS_ctx.selected) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ onMousedown: (...[$event]) => {
@@ -757,6 +789,19 @@ if (__VLS_ctx.logExpanded && __VLS_ctx.selected) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "log-viewer-meta" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.refreshSelectedRelease) },
+        ...{ class: "log-refresh-button" },
+        ...{ class: ({ spinning: __VLS_ctx.refreshingLogs }) },
+        disabled: (__VLS_ctx.refreshingLogs),
+        'aria-label': "刷新日志",
+        title: "刷新日志",
+    });
+    const __VLS_73 = {}.RefreshCw;
+    /** @type {[typeof __VLS_components.RefreshCw, ]} */ ;
+    // @ts-ignore
+    const __VLS_74 = __VLS_asFunctionalComponent(__VLS_73, new __VLS_73({}));
+    const __VLS_75 = __VLS_74({}, ...__VLS_functionalComponentArgsRest(__VLS_74));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     (__VLS_ctx.lastLog(__VLS_ctx.selected) ? __VLS_ctx.parseApiDate(__VLS_ctx.lastLog(__VLS_ctx.selected).created_at).toLocaleTimeString('zh-CN') : '--');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
@@ -768,11 +813,11 @@ if (__VLS_ctx.logExpanded && __VLS_ctx.selected) {
         'aria-label': "退出放大查看",
         title: "退出放大查看",
     });
-    const __VLS_69 = {}.X;
+    const __VLS_77 = {}.X;
     /** @type {[typeof __VLS_components.X, ]} */ ;
     // @ts-ignore
-    const __VLS_70 = __VLS_asFunctionalComponent(__VLS_69, new __VLS_69({}));
-    const __VLS_71 = __VLS_70({}, ...__VLS_functionalComponentArgsRest(__VLS_70));
+    const __VLS_78 = __VLS_asFunctionalComponent(__VLS_77, new __VLS_77({}));
+    const __VLS_79 = __VLS_78({}, ...__VLS_functionalComponentArgsRest(__VLS_78));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "terminal log-viewer-terminal" },
     });
@@ -798,7 +843,7 @@ if (__VLS_ctx.logExpanded && __VLS_ctx.selected) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     }
 }
-var __VLS_68;
+var __VLS_72;
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-row']} */ ;
@@ -873,6 +918,8 @@ var __VLS_68;
 /** @type {__VLS_StyleScopedClasses['detail-terminal']} */ ;
 /** @type {__VLS_StyleScopedClasses['terminal-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['terminal-head-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['terminal-refresh-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['spinning']} */ ;
 /** @type {__VLS_StyleScopedClasses['terminal-expand-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['terminal-body']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-line']} */ ;
@@ -883,6 +930,8 @@ var __VLS_68;
 /** @type {__VLS_StyleScopedClasses['log-viewer']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-viewer-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-viewer-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['log-refresh-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['spinning']} */ ;
 /** @type {__VLS_StyleScopedClasses['terminal']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-viewer-terminal']} */ ;
 /** @type {__VLS_StyleScopedClasses['terminal-body']} */ ;
@@ -915,6 +964,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             deleteCandidate: deleteCandidate,
             deleting: deleting,
             deleteError: deleteError,
+            refreshingLogs: refreshingLogs,
             saving: saving,
             error: error,
             form: form,
@@ -937,6 +987,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             closeRelease: closeRelease,
             requestDelete: requestDelete,
             deleteRelease: deleteRelease,
+            refreshSelectedRelease: refreshSelectedRelease,
         };
     },
 });

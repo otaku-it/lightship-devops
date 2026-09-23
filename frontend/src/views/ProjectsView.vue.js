@@ -1,6 +1,6 @@
-import { computed, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { AlertTriangle, CheckCircle2, Container, GitBranch, LoaderCircle, Pencil, Plus, Rocket, Server, ShieldCheck, Trash2, WandSparkles } from 'lucide-vue-next';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { Activity, AlertTriangle, CheckCircle2, Container, GitBranch, LoaderCircle, Pencil, Plus, Rocket, Server, ShieldCheck, Trash2, WandSparkles } from 'lucide-vue-next';
 import { api } from '../api/client';
 import ModalShell from '../components/ModalShell.vue';
 const projects = ref([]);
@@ -17,6 +17,7 @@ const branchesLoading = ref(false);
 const branchesMessage = ref('');
 const saving = ref(false);
 const error = ref('');
+const route = useRoute();
 const router = useRouter();
 const form = reactive({ name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' });
 const visible = computed(() => projects.value.filter((item) => (filter.value === 'all' || (filter.value === 'docker' ? item.deployment_mode === 'docker' : filter.value === 'compose' ? item.deployment_mode === 'compose' : item.project_type === filter.value)) && `${item.name}${item.description}`.toLowerCase().includes(search.value.toLowerCase())));
@@ -31,10 +32,16 @@ async function load() {
     projects.value = projectResult.data;
     targets.value = targetResult.data;
 }
+function applyRouteSearch() {
+    search.value = String(route.query.search || '');
+}
 function projectTargets(projectId) { return targets.value.filter((item) => item.project_id === projectId); }
 function readyTargetCount(projectId) { return projectTargets(projectId).filter((item) => item.connection_type === 'ssh' && item.status === 'online' && item.credential_configured).length; }
-function configureTargets(projectId) { router.push(`/environments?project_id=${projectId}&create=1`); }
+// “管理服务器”进入项目范围的服务器列表；新增动作由发布环境页的
+// “添加目标服务器”按钮明确触发，避免点击管理时误打开新增表单。
+function configureTargets(projectId) { router.push(`/environments?project_id=${projectId}`); }
 function releaseProject(projectId) { router.push(`/releases?create=1&project_id=${projectId}`); }
+function viewServiceStatus(projectId) { router.push(`/services?project_id=${projectId}`); }
 function applyTemplate() {
     Object.assign(form, templates[form.project_type]);
     if (form.project_type === 'fullstack')
@@ -130,7 +137,11 @@ async function deleteProject() {
         deleting.value = false;
     }
 }
-onMounted(load);
+watch(() => route.query.search, applyRouteSearch);
+onMounted(async () => {
+    applyRouteSearch();
+    await load();
+});
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -316,19 +327,30 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
     });
     (__VLS_ctx.deploymentDetail(project));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "project-quick-actions" },
+        ...{ class: "project-quick-actions project-quick-actions-three" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                __VLS_ctx.viewServiceStatus(project.id);
+            } },
+        ...{ class: "secondary-button" },
+    });
+    const __VLS_28 = {}.Activity;
+    /** @type {[typeof __VLS_components.Activity, ]} */ ;
+    // @ts-ignore
+    const __VLS_29 = __VLS_asFunctionalComponent(__VLS_28, new __VLS_28({}));
+    const __VLS_30 = __VLS_29({}, ...__VLS_functionalComponentArgsRest(__VLS_29));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 __VLS_ctx.configureTargets(project.id);
             } },
         ...{ class: "secondary-button" },
     });
-    const __VLS_28 = {}.Server;
+    const __VLS_32 = {}.Server;
     /** @type {[typeof __VLS_components.Server, ]} */ ;
     // @ts-ignore
-    const __VLS_29 = __VLS_asFunctionalComponent(__VLS_28, new __VLS_28({}));
-    const __VLS_30 = __VLS_29({}, ...__VLS_functionalComponentArgsRest(__VLS_29));
+    const __VLS_33 = __VLS_asFunctionalComponent(__VLS_32, new __VLS_32({}));
+    const __VLS_34 = __VLS_33({}, ...__VLS_functionalComponentArgsRest(__VLS_33));
     (__VLS_ctx.projectTargets(project.id).length ? '管理服务器' : '配置服务器');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
@@ -337,36 +359,36 @@ for (const [project] of __VLS_getVForSourceType((__VLS_ctx.visible))) {
         ...{ class: "primary-button" },
         disabled: (!__VLS_ctx.readyTargetCount(project.id)),
     });
-    const __VLS_32 = {}.Rocket;
+    const __VLS_36 = {}.Rocket;
     /** @type {[typeof __VLS_components.Rocket, ]} */ ;
     // @ts-ignore
-    const __VLS_33 = __VLS_asFunctionalComponent(__VLS_32, new __VLS_32({}));
-    const __VLS_34 = __VLS_33({}, ...__VLS_functionalComponentArgsRest(__VLS_33));
+    const __VLS_37 = __VLS_asFunctionalComponent(__VLS_36, new __VLS_36({}));
+    const __VLS_38 = __VLS_37({}, ...__VLS_functionalComponentArgsRest(__VLS_37));
 }
 if (__VLS_ctx.showCreate) {
     /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
     // @ts-ignore
-    const __VLS_36 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+    const __VLS_40 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
         ...{ 'onClose': {} },
         title: (__VLS_ctx.editingId ? '配置项目' : '接入新项目'),
         subtitle: "发布时平台会真实拉取代码、执行构建并打包制品",
     }));
-    const __VLS_37 = __VLS_36({
+    const __VLS_41 = __VLS_40({
         ...{ 'onClose': {} },
         title: (__VLS_ctx.editingId ? '配置项目' : '接入新项目'),
         subtitle: "发布时平台会真实拉取代码、执行构建并打包制品",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_36));
-    let __VLS_39;
-    let __VLS_40;
-    let __VLS_41;
-    const __VLS_42 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_40));
+    let __VLS_43;
+    let __VLS_44;
+    let __VLS_45;
+    const __VLS_46 = {
         onClose: (...[$event]) => {
             if (!(__VLS_ctx.showCreate))
                 return;
             __VLS_ctx.showCreate = false;
         }
     };
-    __VLS_38.slots.default;
+    __VLS_42.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "project-config-scroll" },
     });
@@ -470,22 +492,22 @@ if (__VLS_ctx.showCreate) {
         disabled: (__VLS_ctx.branchesLoading || !__VLS_ctx.form.repository_url.trim()),
     });
     if (__VLS_ctx.branchesLoading) {
-        const __VLS_43 = {}.LoaderCircle;
+        const __VLS_47 = {}.LoaderCircle;
         /** @type {[typeof __VLS_components.LoaderCircle, ]} */ ;
         // @ts-ignore
-        const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({
+        const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({
             ...{ class: "spin" },
         }));
-        const __VLS_45 = __VLS_44({
+        const __VLS_49 = __VLS_48({
             ...{ class: "spin" },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_44));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_48));
     }
     else {
-        const __VLS_47 = {}.WandSparkles;
+        const __VLS_51 = {}.WandSparkles;
         /** @type {[typeof __VLS_components.WandSparkles, ]} */ ;
         // @ts-ignore
-        const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({}));
-        const __VLS_49 = __VLS_48({}, ...__VLS_functionalComponentArgsRest(__VLS_48));
+        const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
+        const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
     }
     (__VLS_ctx.branchesLoading ? '正在读取...' : '识别远程分支');
     if (__VLS_ctx.branchesMessage) {
@@ -501,11 +523,11 @@ if (__VLS_ctx.showCreate) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "security-note full compact-security-note" },
     });
-    const __VLS_51 = {}.ShieldCheck;
+    const __VLS_55 = {}.ShieldCheck;
     /** @type {[typeof __VLS_components.ShieldCheck, ]} */ ;
     // @ts-ignore
-    const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
-    const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
+    const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
+    const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -540,11 +562,11 @@ if (__VLS_ctx.showCreate) {
         type: "button",
         ...{ class: ({ active: __VLS_ctx.form.deployment_mode === 'docker' }) },
     });
-    const __VLS_55 = {}.Container;
+    const __VLS_59 = {}.Container;
     /** @type {[typeof __VLS_components.Container, ]} */ ;
     // @ts-ignore
-    const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
-    const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
+    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
+    const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.showCreate))
@@ -554,11 +576,11 @@ if (__VLS_ctx.showCreate) {
         type: "button",
         ...{ class: ({ active: __VLS_ctx.form.deployment_mode === 'compose' }) },
     });
-    const __VLS_59 = {}.Container;
+    const __VLS_63 = {}.Container;
     /** @type {[typeof __VLS_components.Container, ]} */ ;
     // @ts-ignore
-    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
-    const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
+    const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({}));
+    const __VLS_65 = __VLS_64({}, ...__VLS_functionalComponentArgsRest(__VLS_64));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full" },
@@ -628,11 +650,11 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full docker-note" },
         });
-        const __VLS_63 = {}.Container;
+        const __VLS_67 = {}.Container;
         /** @type {[typeof __VLS_components.Container, ]} */ ;
         // @ts-ignore
-        const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({}));
-        const __VLS_65 = __VLS_64({}, ...__VLS_functionalComponentArgsRest(__VLS_64));
+        const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({}));
+        const __VLS_69 = __VLS_68({}, ...__VLS_functionalComponentArgsRest(__VLS_68));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -659,11 +681,11 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full docker-note" },
         });
-        const __VLS_67 = {}.Container;
+        const __VLS_71 = {}.Container;
         /** @type {[typeof __VLS_components.Container, ]} */ ;
         // @ts-ignore
-        const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({}));
-        const __VLS_69 = __VLS_68({}, ...__VLS_functionalComponentArgsRest(__VLS_68));
+        const __VLS_72 = __VLS_asFunctionalComponent(__VLS_71, new __VLS_71({}));
+        const __VLS_73 = __VLS_72({}, ...__VLS_functionalComponentArgsRest(__VLS_72));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -707,51 +729,51 @@ if (__VLS_ctx.showCreate) {
         ...{ class: "primary-button" },
         disabled: (__VLS_ctx.saving),
     });
-    const __VLS_71 = {}.Server;
+    const __VLS_75 = {}.Server;
     /** @type {[typeof __VLS_components.Server, ]} */ ;
     // @ts-ignore
-    const __VLS_72 = __VLS_asFunctionalComponent(__VLS_71, new __VLS_71({}));
-    const __VLS_73 = __VLS_72({}, ...__VLS_functionalComponentArgsRest(__VLS_72));
+    const __VLS_76 = __VLS_asFunctionalComponent(__VLS_75, new __VLS_75({}));
+    const __VLS_77 = __VLS_76({}, ...__VLS_functionalComponentArgsRest(__VLS_76));
     (__VLS_ctx.saving ? '正在保存...' : '保存并配置服务器');
-    var __VLS_38;
+    var __VLS_42;
 }
 if (__VLS_ctx.deleteCandidate) {
     /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
     // @ts-ignore
-    const __VLS_75 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+    const __VLS_79 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
         ...{ 'onClose': {} },
         title: "删除项目",
         subtitle: "此操作不可恢复",
         size: "small",
     }));
-    const __VLS_76 = __VLS_75({
+    const __VLS_80 = __VLS_79({
         ...{ 'onClose': {} },
         title: "删除项目",
         subtitle: "此操作不可恢复",
         size: "small",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_75));
-    let __VLS_78;
-    let __VLS_79;
-    let __VLS_80;
-    const __VLS_81 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_79));
+    let __VLS_82;
+    let __VLS_83;
+    let __VLS_84;
+    const __VLS_85 = {
         onClose: (...[$event]) => {
             if (!(__VLS_ctx.deleteCandidate))
                 return;
             __VLS_ctx.deleteCandidate = null;
         }
     };
-    __VLS_77.slots.default;
+    __VLS_81.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "modal-body delete-confirm-body" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "delete-warning-icon" },
     });
-    const __VLS_82 = {}.AlertTriangle;
+    const __VLS_86 = {}.AlertTriangle;
     /** @type {[typeof __VLS_components.AlertTriangle, ]} */ ;
     // @ts-ignore
-    const __VLS_83 = __VLS_asFunctionalComponent(__VLS_82, new __VLS_82({}));
-    const __VLS_84 = __VLS_83({}, ...__VLS_functionalComponentArgsRest(__VLS_83));
+    const __VLS_87 = __VLS_asFunctionalComponent(__VLS_86, new __VLS_86({}));
+    const __VLS_88 = __VLS_87({}, ...__VLS_functionalComponentArgsRest(__VLS_87));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.deleteCandidate.name);
@@ -783,13 +805,13 @@ if (__VLS_ctx.deleteCandidate) {
         ...{ class: "danger-button" },
         disabled: (__VLS_ctx.deleting),
     });
-    const __VLS_86 = {}.Trash2;
+    const __VLS_90 = {}.Trash2;
     /** @type {[typeof __VLS_components.Trash2, ]} */ ;
     // @ts-ignore
-    const __VLS_87 = __VLS_asFunctionalComponent(__VLS_86, new __VLS_86({}));
-    const __VLS_88 = __VLS_87({}, ...__VLS_functionalComponentArgsRest(__VLS_87));
+    const __VLS_91 = __VLS_asFunctionalComponent(__VLS_90, new __VLS_90({}));
+    const __VLS_92 = __VLS_91({}, ...__VLS_functionalComponentArgsRest(__VLS_91));
     (__VLS_ctx.deleting ? '正在删除...' : '确认删除项目');
-    var __VLS_77;
+    var __VLS_81;
 }
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
@@ -829,6 +851,8 @@ if (__VLS_ctx.deleteCandidate) {
 /** @type {__VLS_StyleScopedClasses['health-dot']} */ ;
 /** @type {__VLS_StyleScopedClasses['warn']} */ ;
 /** @type {__VLS_StyleScopedClasses['project-quick-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['project-quick-actions-three']} */ ;
+/** @type {__VLS_StyleScopedClasses['secondary-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['secondary-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['project-config-scroll']} */ ;
@@ -898,6 +922,7 @@ var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
+            Activity: Activity,
             AlertTriangle: AlertTriangle,
             CheckCircle2: CheckCircle2,
             Container: Container,
@@ -929,6 +954,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             readyTargetCount: readyTargetCount,
             configureTargets: configureTargets,
             releaseProject: releaseProject,
+            viewServiceStatus: viewServiceStatus,
             applyTemplate: applyTemplate,
             openCreate: openCreate,
             openDockerCreate: openDockerCreate,

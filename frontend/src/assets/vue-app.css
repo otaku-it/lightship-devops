@@ -36,12 +36,22 @@ button:disabled { opacity: .6; cursor: not-allowed; transform: none !important; 
 .terminal-expand-button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid rgba(255,255,255,.14); border-radius: 7px; color: #b9c8be; background: rgba(255,255,255,.04); cursor: pointer; transition: .18s ease; }
 .terminal-expand-button:hover { color: white; border-color: rgba(66,223,141,.55); background: rgba(66,223,141,.1); }
 .terminal-expand-button svg { width: 14px; height: 14px; }
+.terminal-refresh-button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid rgba(255,255,255,.14); border-radius: 7px; color: #b9c8be; background: rgba(255,255,255,.04); cursor: pointer; transition: .18s ease; }
+.terminal-refresh-button:hover { color: white; border-color: rgba(66,223,141,.55); background: rgba(66,223,141,.1); }
+.terminal-refresh-button:disabled { cursor: wait; opacity: .7; }
+.terminal-refresh-button svg { width: 14px; height: 14px; }
+.terminal-refresh-button.spinning svg { animation: spin .8s linear infinite; }
 .log-viewer-backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 32px; background: rgba(8,16,11,.76); backdrop-filter: blur(5px); }
 .log-viewer { display: flex; flex-direction: column; width: min(1400px, calc(100vw - 64px)); height: min(900px, calc(100vh - 64px)); min-height: 420px; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: #101b15; box-shadow: 0 28px 90px rgba(0,0,0,.38); }
 .log-viewer-head { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; min-height: 72px; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,.08); color: white; }
 .log-viewer-head h3 { margin: 0; font-size: 15px; }
 .log-viewer-head p { margin: 5px 0 0; color: #829389; font: 9px "JetBrains Mono", monospace; }
 .log-viewer-meta { display: flex; align-items: center; gap: 14px; color: #829389; font: 9px "JetBrains Mono", monospace; }
+.log-refresh-button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid rgba(255,255,255,.13); border-radius: 8px; color: #c8d4cc; background: rgba(255,255,255,.04); cursor: pointer; }
+.log-refresh-button:hover { color: white; border-color: rgba(66,223,141,.55); background: rgba(66,223,141,.1); }
+.log-refresh-button:disabled { cursor: wait; opacity: .7; }
+.log-refresh-button svg { width: 16px; height: 16px; }
+.log-refresh-button.spinning svg { animation: spin .8s linear infinite; }
 .log-viewer-meta button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid rgba(255,255,255,.13); border-radius: 8px; color: #c8d4cc; background: rgba(255,255,255,.04); cursor: pointer; }
 .log-viewer-meta button:hover { color: white; border-color: rgba(66,223,141,.55); background: rgba(66,223,141,.1); }
 .log-viewer-meta svg { width: 17px; height: 17px; }

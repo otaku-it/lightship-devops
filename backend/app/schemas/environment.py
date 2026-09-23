@@ -27,6 +27,7 @@ class TargetBase(BaseModel):
     username: str = "deploy"
     deploy_path: str = "/opt/apps/{project}/releases/{version}"
     start_command: str = "systemctl restart {project}"
+    stop_command: str = "systemctl stop {project}"
     health_check_command: str = "curl --fail http://127.0.0.1:{service_port}/health"
 
 
@@ -70,3 +71,30 @@ class ConnectionTestResult(BaseModel):
     message: str
     system_info: str = ""
     host_key_fingerprint: str = ""
+
+
+class ServiceControlRequest(BaseModel):
+    action: str
+
+
+class ServiceControlRead(BaseModel):
+    target_id: int
+    action: str
+    success: bool
+    message: str
+    detail: str = ""
+    latency_ms: int = 0
+
+
+class ServiceStatusRead(BaseModel):
+    target_id: int
+    project_id: int
+    status: str
+    healthy: bool
+    message: str
+    detail: str = ""
+    version: str = ""
+    release_no: str = ""
+    runtime: str = ""
+    latency_ms: int = 0
+    checked_at: datetime

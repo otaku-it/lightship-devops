@@ -6,7 +6,7 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.models.environment import DeploymentTarget, Environment, TargetAccess
 from app.models.project import Project
-from app.models.release import ReleaseDeployment
+from app.models.release import Release, ReleaseDeployment
 from app.models.user import User
 from app.schemas.environment import (
     ConnectionTestRequest,
@@ -15,9 +15,13 @@ from app.schemas.environment import (
     EnvironmentRead,
     TargetCreate,
     TargetRead,
+    ServiceStatusRead,
+    ServiceControlRead,
+    ServiceControlRequest,
 )
 from app.services.executors.factory import get_executor
 from app.services.credentials import decrypt_secret, encrypt_secret
+from app.core.config import settings
 
 router = APIRouter(tags=["环境"])
 
@@ -225,3 +229,92 @@ def test_target(
         access.host_key_fingerprint = result.host_key_fingerprint
     db.commit()
     return ConnectionTestResult(**result.__dict__)
+
+
+@router.post("/targets/{target_id}/service-status", response_model=ServiceStatusRead)
+def check_service_status(
+    target_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ServiceStatusRead:
+    target = db.get(DeploymentTarget, target_id)
+    if not target or not target.project:
+        raise HTTPException(status_code=404, detail="部署目标或关联项目不存在")
+    access = target.access
+    if settings.executor_mode != "mock" and (not access or not (access.password_encrypted or access.private_key_encrypted)):
+        raise HTTPException(status_code=422, detail="目标服务器尚未配置 SSH 凭证")
+    latest = db.execute(
+        select(Release, ReleaseDeployment)
+        .join(ReleaseDeployment, ReleaseDeployment.release_id == Release.id)
+        .where(
+            ReleaseDeployment.target_id == target.id,
+            ReleaseDeployment.status == "success",
+            Release.status == "success",
+        )
+        .order_by(Release.finished_at.desc(), Release.id.desc())
+        .limit(1)
+    ).first()
+    release, deployment = latest if latest else (None, None)
+    try:
+        executor = get_executor(target.connection_type)
+        result = executor.check_service_status(
+            target,
+            project_name=target.project.name,
+            deployment_mode=target.project.deployment_mode,
+            version=release.version if release else "",
+            release_no=release.release_no if release else "",
+            deployed_path=deployment.deployed_path if deployment else "",
+            docker_container_port=target.project.docker_container_port,
+            compose_project_name=target.project.compose_project_name,
+            private_key=decrypt_secret(access.private_key_encrypted if access else ""),
+            password=decrypt_secret(access.password_encrypted if access else ""),
+            passphrase=decrypt_secret(access.passphrase_encrypted if access else ""),
+            expected_fingerprint=access.host_key_fingerprint if access else "",
+            trust_on_first_use=access.trust_on_first_use if access else False,
+            service_port=access.service_port if access else 8080,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ServiceStatusRead(
+        target_id=target.id,
+        project_id=target.project.id,
+        **result.__dict__,
+    )
+
+
+@router.post("/targets/{target_id}/service-control", response_model=ServiceControlRead)
+def control_service(
+    target_id: int,
+    payload: ServiceControlRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ServiceControlRead:
+    if payload.action not in {"stop", "start", "restart"}:
+        raise HTTPException(status_code=422, detail="服务操作只支持 stop、start 或 restart")
+    target = db.get(DeploymentTarget, target_id)
+    if not target or not target.project:
+        raise HTTPException(status_code=404, detail="部署目标或关联项目不存在")
+    access = target.access
+    if settings.executor_mode != "mock" and (not access or not (access.password_encrypted or access.private_key_encrypted)):
+        raise HTTPException(status_code=422, detail="目标服务器尚未配置 SSH 凭证")
+    try:
+        executor = get_executor(target.connection_type)
+        result = executor.control_service(
+            target,
+            action=payload.action,
+            project_name=target.project.name,
+            deployment_mode=target.project.deployment_mode,
+            stop_command=target.stop_command,
+            start_command=target.start_command,
+            compose_file_path=target.project.compose_file_path,
+            compose_project_name=target.project.compose_project_name,
+            private_key=decrypt_secret(access.private_key_encrypted if access else ""),
+            password=decrypt_secret(access.password_encrypted if access else ""),
+            passphrase=decrypt_secret(access.passphrase_encrypted if access else ""),
+            expected_fingerprint=access.host_key_fingerprint if access else "",
+            trust_on_first_use=access.trust_on_first_use if access else False,
+            service_port=access.service_port if access else 8080,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ServiceControlRead(target_id=target.id, action=payload.action, **result.__dict__)

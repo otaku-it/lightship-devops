@@ -1,19 +1,76 @@
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Bell, Box, ChevronRight, Folder, Gauge, History, Layers3, Plus, Search, Server, Settings, ShipWheel, } from 'lucide-vue-next';
+import { Bell, Box, ChevronRight, Folder, Gauge, History, Layers3, Plus, Search, Server, Settings, ShipWheel, Activity, } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
+import { api } from '../api/client';
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const search = ref('');
+const searchInput = ref(null);
+const searchProjects = ref([]);
+const searchReleases = ref([]);
+const searchLoading = ref(false);
 const nav = [
     { to: '/', name: 'dashboard', label: '总览', icon: Gauge },
     { to: '/projects', name: 'projects', label: '项目', icon: Folder },
     { to: '/releases', name: 'releases', label: '发布记录', icon: History },
     { to: '/environments', name: 'environments', label: '发布环境', icon: Server },
+    { to: '/services', name: 'services', label: '服务状态', icon: Activity },
 ];
-const titles = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境' };
+const titles = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境', services: '服务状态' };
 const title = computed(() => titles[String(route.name)] || '轻舟');
+const searchResults = computed(() => {
+    const keyword = search.value.trim().toLowerCase();
+    if (!keyword)
+        return [];
+    const projects = searchProjects.value
+        .filter((item) => `${item.name} ${item.description} ${item.repository_url}`.toLowerCase().includes(keyword))
+        .slice(0, 5)
+        .map((item) => ({ kind: 'project', id: item.id, title: item.name, detail: item.description || item.repository_url, to: `/projects?search=${encodeURIComponent(item.name)}` }));
+    const releases = searchReleases.value
+        .filter((item) => `${item.release_no} ${item.version} ${item.project_name} ${item.environment_name} ${item.status}`.toLowerCase().includes(keyword))
+        .slice(0, 8)
+        .map((item) => ({ kind: 'release', id: item.id, title: item.release_no, detail: `${item.project_name} · v${item.version} · ${item.environment_name}`, to: `/releases?release_id=${item.id}` }));
+    return [...projects, ...releases];
+});
+async function loadSearchData() {
+    searchLoading.value = true;
+    try {
+        const [projects, releases] = await Promise.all([api.get('/projects'), api.get('/releases')]);
+        searchProjects.value = projects.data;
+        searchReleases.value = releases.data;
+    }
+    catch {
+        searchProjects.value = [];
+        searchReleases.value = [];
+    }
+    finally {
+        searchLoading.value = false;
+    }
+}
+function selectSearchResult(to) {
+    search.value = '';
+    router.push(to);
+}
+function handleSearchShortcut(event) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchInput.value?.focus();
+    }
+    else if (event.key === 'Escape' && document.activeElement === searchInput.value) {
+        search.value = '';
+        searchInput.value?.blur();
+    }
+    else if (event.key === 'Enter' && document.activeElement === searchInput.value && searchResults.value[0]) {
+        selectSearchResult(searchResults.value[0].to);
+    }
+}
+onMounted(() => {
+    loadSearchData();
+    window.addEventListener('keydown', handleSearchShortcut);
+});
+onBeforeUnmount(() => window.removeEventListener('keydown', handleSearchShortcut));
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -184,12 +241,60 @@ const __VLS_28 = {}.Search;
 const __VLS_29 = __VLS_asFunctionalComponent(__VLS_28, new __VLS_28({}));
 const __VLS_30 = __VLS_29({}, ...__VLS_functionalComponentArgsRest(__VLS_29));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+    ...{ onFocus: (__VLS_ctx.loadSearchData) },
+    ref: "searchInput",
     placeholder: "搜索项目、版本或发布单",
 });
 (__VLS_ctx.search);
+/** @type {typeof __VLS_ctx.searchInput} */ ;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "shortcut" },
 });
+if (__VLS_ctx.search.trim()) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "global-search-results" },
+    });
+    if (__VLS_ctx.searchLoading) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "global-search-empty" },
+        });
+    }
+    else if (__VLS_ctx.searchResults.length) {
+        for (const [item] of __VLS_getVForSourceType((__VLS_ctx.searchResults))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                ...{ onClick: (...[$event]) => {
+                        if (!(__VLS_ctx.search.trim()))
+                            return;
+                        if (!!(__VLS_ctx.searchLoading))
+                            return;
+                        if (!(__VLS_ctx.searchResults.length))
+                            return;
+                        __VLS_ctx.selectSearchResult(item.to);
+                    } },
+                key: (`${item.kind}-${item.id}`),
+                ...{ class: "global-search-result" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "global-search-kind" },
+                ...{ class: (item.kind) },
+            });
+            (item.kind === 'project' ? '项目' : '发布');
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+            (item.title);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+            (item.detail);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "global-search-arrow" },
+            });
+        }
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "global-search-empty" },
+        });
+    }
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ class: "icon-button" },
 });
@@ -245,6 +350,12 @@ const __VLS_42 = __VLS_41({}, ...__VLS_functionalComponentArgsRest(__VLS_41));
 /** @type {__VLS_StyleScopedClasses['breadcrumb']} */ ;
 /** @type {__VLS_StyleScopedClasses['search-box']} */ ;
 /** @type {__VLS_StyleScopedClasses['shortcut']} */ ;
+/** @type {__VLS_StyleScopedClasses['global-search-results']} */ ;
+/** @type {__VLS_StyleScopedClasses['global-search-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['global-search-result']} */ ;
+/** @type {__VLS_StyleScopedClasses['global-search-kind']} */ ;
+/** @type {__VLS_StyleScopedClasses['global-search-arrow']} */ ;
+/** @type {__VLS_StyleScopedClasses['global-search-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['icon-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary-button']} */ ;
 var __VLS_dollars;
@@ -263,8 +374,13 @@ const __VLS_self = (await import('vue')).defineComponent({
             router: router,
             auth: auth,
             search: search,
+            searchInput: searchInput,
+            searchLoading: searchLoading,
             nav: nav,
             title: title,
+            searchResults: searchResults,
+            loadSearchData: loadSearchData,
+            selectSearchResult: selectSearchResult,
         };
     },
 });

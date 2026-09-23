@@ -22,7 +22,7 @@ const saving = ref(false);
 const readyProjectId = ref(null);
 const route = useRoute();
 const router = useRouter();
-const form = reactive({ project_id: 0, environment_id: 0, name: '', connection_type: 'ssh', address: '', port: 22, username: 'deploy', auth_type: 'password', password: '', private_key: '', passphrase: '', host_key_fingerprint: '', trust_on_first_use: true, service_port: 8080, deploy_path: '/opt/apps/{project}/releases/{version}', start_command: 'systemctl restart {project}', health_check_command: 'curl --fail http://127.0.0.1:{service_port}/health' });
+const form = reactive({ project_id: 0, environment_id: 0, name: '', connection_type: 'ssh', address: '', port: 22, username: 'deploy', auth_type: 'password', password: '', private_key: '', passphrase: '', host_key_fingerprint: '', trust_on_first_use: true, service_port: 8080, deploy_path: '/opt/apps/{project}/releases/{version}', start_command: 'systemctl restart {project}', stop_command: 'systemctl stop {project}', health_check_command: 'curl --fail http://127.0.0.1:{service_port}/health' });
 const projectTargets = computed(() => selectedProjectId.value
     ? targets.value.filter((item) => item.project_id === selectedProjectId.value)
     : targets.value);
@@ -59,7 +59,7 @@ async function load() {
 }
 function openCreate() {
     editingId.value = null;
-    Object.assign(form, { name: '', connection_type: 'ssh', address: '', port: 22, username: 'deploy', auth_type: 'password', password: '', private_key: '', passphrase: '', host_key_fingerprint: '', trust_on_first_use: true, service_port: 8080, deploy_path: '/opt/apps/{project}/releases/{version}', start_command: 'systemctl restart {project}', health_check_command: 'curl --fail http://127.0.0.1:{service_port}/health' });
+    Object.assign(form, { name: '', connection_type: 'ssh', address: '', port: 22, username: 'deploy', auth_type: 'password', password: '', private_key: '', passphrase: '', host_key_fingerprint: '', trust_on_first_use: true, service_port: 8080, deploy_path: '/opt/apps/{project}/releases/{version}', start_command: 'systemctl restart {project}', stop_command: 'systemctl stop {project}', health_check_command: 'curl --fail http://127.0.0.1:{service_port}/health' });
     if (environments.value.length)
         form.environment_id = environments.value.at(-1).id;
     form.project_id = selectedProjectId.value || projects.value[0]?.id || 0;
@@ -764,6 +764,13 @@ if (__VLS_ctx.showCreate) {
             });
             __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
             __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({});
+            (__VLS_ctx.form.stop_command);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "form-field full" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({});
             (__VLS_ctx.form.health_check_command);
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "security-note full" },
@@ -978,6 +985,8 @@ if (__VLS_ctx.deleteCandidate) {
 /** @type {__VLS_StyleScopedClasses['security-note']} */ ;
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['docker-note']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;

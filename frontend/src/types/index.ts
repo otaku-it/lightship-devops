@@ -45,6 +45,7 @@ export interface DeploymentTarget {
   credential_ref: string
   deploy_path: string
   start_command: string
+  stop_command: string
   health_check_command: string
   status: string
   system_info: string
@@ -54,6 +55,20 @@ export interface DeploymentTarget {
   host_key_fingerprint: string
   trust_on_first_use: boolean
   service_port: number
+}
+
+export interface ServiceStatus {
+  target_id: number
+  project_id: number
+  status: string
+  healthy: boolean
+  message: string
+  detail: string
+  version: string
+  release_no: string
+  runtime: string
+  latency_ms: number
+  checked_at: string
 }
 
 export interface ReleaseStep {

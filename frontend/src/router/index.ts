@@ -5,6 +5,7 @@ import EnvironmentsView from '../views/EnvironmentsView.vue'
 import LoginView from '../views/LoginView.vue'
 import ProjectsView from '../views/ProjectsView.vue'
 import ReleasesView from '../views/ReleasesView.vue'
+import ServicesView from '../views/ServicesView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -18,6 +19,7 @@ const router = createRouter({
         { path: 'projects', name: 'projects', component: ProjectsView },
         { path: 'releases', name: 'releases', component: ReleasesView },
         { path: 'environments', name: 'environments', component: EnvironmentsView },
+        { path: 'services', name: 'services', component: ServicesView },
       ],
     },
   ],
@@ -30,4 +32,3 @@ router.beforeEach((to) => {
 })
 
 export default router
-

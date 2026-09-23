@@ -13,6 +13,11 @@ def run_schema_migrations(engine: Engine) -> None:
             connection.execute(
                 text("ALTER TABLE deployment_targets ADD COLUMN project_id INTEGER NULL")
             )
+    if "stop_command" not in columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE deployment_targets ADD COLUMN stop_command VARCHAR(500) NOT NULL DEFAULT 'systemctl stop {project}'")
+            )
     project_columns = {column["name"] for column in inspector.get_columns("projects")}
     additions = {
         "deployment_mode": "VARCHAR(32) NOT NULL DEFAULT 'file'",

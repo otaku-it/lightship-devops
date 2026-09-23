@@ -34,6 +34,7 @@ class DeploymentTarget(TimestampMixin, Base):
         String(500), default="/opt/apps/{project}/releases/{version}"
     )
     start_command: Mapped[str] = mapped_column(String(500), default="")
+    stop_command: Mapped[str] = mapped_column(String(500), default="systemctl stop {project}")
     health_check_command: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(32), default="unknown")
     system_info: Mapped[str] = mapped_column(Text, default="")
