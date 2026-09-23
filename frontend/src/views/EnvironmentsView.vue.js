@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { AlertTriangle, ArrowRight, Check, FolderKanban, KeyRound, Network, Pencil, Plus, RefreshCw, Server, ShieldCheck, Terminal, Trash2, Unplug } from 'lucide-vue-next';
 import { api } from '../api/client';
 import ModalShell from '../components/ModalShell.vue';
+import { useAuthStore } from '../stores/auth';
 const targets = ref([]);
 const environments = ref([]);
 const projects = ref([]);
@@ -22,6 +23,8 @@ const saving = ref(false);
 const readyProjectId = ref(null);
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
+const canManage = computed(() => ['admin', 'release_manager'].includes(auth.role));
 const form = reactive({ project_id: 0, environment_id: 0, name: '', connection_type: 'ssh', address: '', port: 22, username: 'deploy', auth_type: 'password', password: '', private_key: '', passphrase: '', host_key_fingerprint: '', trust_on_first_use: true, service_port: 8080, deploy_path: '/opt/apps/{project}/releases/{version}', start_command: 'systemctl restart {project}', stop_command: 'systemctl stop {project}', health_check_command: 'curl --fail http://127.0.0.1:{service_port}/health' });
 const projectTargets = computed(() => selectedProjectId.value
     ? targets.value.filter((item) => item.project_id === selectedProjectId.value)
@@ -58,6 +61,8 @@ async function load() {
         form.project_id = projects.value[0].id;
 }
 function openCreate() {
+    if (!canManage.value)
+        return;
     editingId.value = null;
     Object.assign(form, { name: '', connection_type: 'ssh', address: '', port: 22, username: 'deploy', auth_type: 'password', password: '', private_key: '', passphrase: '', host_key_fingerprint: '', trust_on_first_use: true, service_port: 8080, deploy_path: '/opt/apps/{project}/releases/{version}', start_command: 'systemctl restart {project}', stop_command: 'systemctl stop {project}', health_check_command: 'curl --fail http://127.0.0.1:{service_port}/health' });
     if (environments.value.length)
@@ -71,6 +76,8 @@ function openCreate() {
     showCreate.value = true;
 }
 function openEdit(target) {
+    if (!canManage.value)
+        return;
     editingId.value = target.id;
     Object.assign(form, { ...target, password: '', private_key: '', passphrase: '' });
     step.value = 2;
@@ -151,6 +158,8 @@ async function saveTarget() {
     }
 }
 function requestDelete(target) {
+    if (!canManage.value)
+        return;
     deleteError.value = '';
     deleteCandidate.value = target;
 }
@@ -190,7 +199,8 @@ const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "content compact" },
+    ...{ class: "content compact environments-page" },
+    ...{ class: (`role-${__VLS_ctx.auth.role}`) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "hero-row" },
@@ -901,6 +911,7 @@ if (__VLS_ctx.deleteCandidate) {
 }
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
+/** @type {__VLS_StyleScopedClasses['environments-page']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['eyebrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary-button']} */ ;
@@ -1045,6 +1056,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             error: error,
             saving: saving,
             readyProjectId: readyProjectId,
+            auth: auth,
             form: form,
             projectTargets: projectTargets,
             online: online,

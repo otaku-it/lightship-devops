@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_operator, require_release_manager
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.environment import DeploymentTarget, Environment, TargetAccess
@@ -50,7 +50,7 @@ def create_release(
     payload: ReleaseCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_operator),
 ) -> ReleaseRead:
     project = db.get(Project, payload.project_id)
     environment = db.get(Environment, payload.environment_id)
@@ -129,7 +129,7 @@ def get_release(
 def delete_release(
     release_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_release_manager),
 ) -> Response:
     release = db.get(Release, release_id)
     if not release:

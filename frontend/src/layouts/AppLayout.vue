@@ -25,7 +25,8 @@ const nav = [
   { to: '/environments', name: 'environments', label: '发布环境', icon: Server },
   { to: '/services', name: 'services', label: '服务状态', icon: Activity },
 ]
-const titles: Record<string, string> = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境', services: '服务状态' }
+const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role))
+const titles: Record<string, string> = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境', services: '服务状态', settings: '平台设置', artifacts: '制品库', audit: '审计日志' }
 const title = computed(() => titles[String(route.name)] || '轻舟')
 const searchResults = computed(() => {
   const keyword = search.value.trim().toLowerCase()
@@ -69,6 +70,7 @@ function handleSearchShortcut(event: KeyboardEvent) {
   }
 }
 onMounted(() => {
+  auth.syncMe().catch(() => undefined)
   loadSearchData()
   window.addEventListener('keydown', handleSearchShortcut)
 })
@@ -85,11 +87,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleSearchShortcut
         <router-link v-for="item in nav" :key="item.name" :to="item.to" class="nav-item" :class="{ active: route.name === item.name }">
           <component :is="item.icon" /><span>{{ item.label }}</span>
         </router-link>
-        <button class="nav-item" @click="router.push('/environments')"><Box /><span>制品库</span></button>
-        <button class="nav-item" @click="router.push('/releases')"><Layers3 /><span>审计日志</span></button>
+        <button class="nav-item" :class="{active: route.name === 'artifacts'}" @click="router.push('/artifacts')"><Box /><span>制品库</span></button>
+        <button class="nav-item" :class="{active: route.name === 'audit'}" @click="router.push('/audit')"><Layers3 /><span>审计日志</span></button>
       </nav>
       <div class="nav-label">系统</div>
-      <nav class="nav-list"><button class="nav-item"><Settings /><span>平台设置</span></button></nav>
+      <nav class="nav-list"><button class="nav-item" :class="{active: route.name === 'settings'}" @click="router.push('/settings')"><Settings /><span>平台设置</span></button></nav>
       <div class="sidebar-foot">
         <div class="runner-health"><div class="runner-health-head"><span>构建节点</span><span class="runner-health-value">5 / 6 在线</span></div><div class="runner-bars"><i v-for="(h,i) in [9,14,20,13,23,18,25,11,20,16,22,18]" :key="i" class="on" :style="{height:`${h}px`}" /></div></div>
         <button class="user-row user-button" @click="auth.logout"><div class="avatar">{{ auth.displayName.slice(0,2).toUpperCase() }}</div><div><strong>{{ auth.displayName }}</strong><span>{{ auth.role }} · 点击退出</span></div></button>
@@ -100,7 +102,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleSearchShortcut
         <div><div class="page-title">{{ title }}</div><div class="breadcrumb">Sunny Tech / {{ title }}</div></div>
         <div class="search-box"><Search /><input ref="searchInput" v-model="search" placeholder="搜索项目、版本或发布单" @focus="loadSearchData" /><span class="shortcut">⌘ K</span><div v-if="search.trim()" class="global-search-results"><div v-if="searchLoading" class="global-search-empty">正在搜索...</div><template v-else-if="searchResults.length"><button v-for="item in searchResults" :key="`${item.kind}-${item.id}`" class="global-search-result" @click="selectSearchResult(item.to)"><span class="global-search-kind" :class="item.kind">{{ item.kind === 'project' ? '项目' : '发布' }}</span><span><strong>{{ item.title }}</strong><small>{{ item.detail }}</small></span><span class="global-search-arrow">›</span></button></template><div v-else class="global-search-empty">没有找到匹配的项目、版本或发布单</div></div></div>
         <button class="icon-button"><Bell /></button>
-        <button class="primary-button" @click="router.push('/releases?create=1')"><Plus />发起发布</button>
+        <button v-if="canOperate" class="primary-button" @click="router.push('/releases?create=1')"><Plus />发起发布</button>
       </header>
       <router-view />
     </main>

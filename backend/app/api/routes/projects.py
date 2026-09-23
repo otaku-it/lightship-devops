@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_operator, require_release_manager
 from app.core.database import get_db
 from app.models.environment import DeploymentTarget
 from app.models.project import Project, ProjectCredential
@@ -58,7 +58,7 @@ def list_projects(
 def create_project(
     payload: ProjectCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ) -> ProjectRead:
     validate_project(payload)
     if db.scalar(select(Project).where(Project.name == payload.name)):
@@ -113,7 +113,7 @@ def update_project(
     project_id: int,
     payload: ProjectCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_operator),
 ) -> ProjectRead:
     validate_project(payload)
     project = db.get(Project, project_id)
@@ -161,7 +161,7 @@ def get_project(
 def delete_project(
     project_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_release_manager),
 ) -> Response:
     project = db.get(Project, project_id)
     if not project:

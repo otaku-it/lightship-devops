@@ -20,6 +20,14 @@ export const useAuthStore = defineStore('auth', {
       localStorage.setItem('lightship_display_name', this.displayName)
       localStorage.setItem('lightship_role', this.role)
     },
+    async syncMe() {
+      if (!this.token) return
+      const { data } = await api.get('/auth/me')
+      this.displayName = data.display_name
+      this.role = data.role
+      localStorage.setItem('lightship_display_name', this.displayName)
+      localStorage.setItem('lightship_role', this.role)
+    },
     logout() {
       this.token = ''
       localStorage.removeItem('lightship_token')
@@ -27,4 +35,3 @@ export const useAuthStore = defineStore('auth', {
     },
   },
 })
-

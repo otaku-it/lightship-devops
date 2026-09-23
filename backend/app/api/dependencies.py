@@ -22,3 +22,20 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已失效")
     return user
 
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只有平台管理员可以执行此操作")
+    return user
+
+
+def require_operator(user: User = Depends(get_current_user)) -> User:
+    if user.role not in {"admin", "release_manager", "developer"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只读用户不能执行写操作")
+    return user
+
+
+def require_release_manager(user: User = Depends(get_current_user)) -> User:
+    if user.role not in {"admin", "release_manager"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只有管理员或发布管理员可以执行此操作")
+    return user

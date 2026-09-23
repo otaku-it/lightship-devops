@@ -2,8 +2,10 @@ import { computed, onMounted, ref } from 'vue';
 import { CheckCircle2, CircleAlert, Container, Pause, Play, RefreshCw, RotateCw, Server, TriangleAlert, XCircle } from 'lucide-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api/client';
+import { useAuthStore } from '../stores/auth';
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const projects = ref([]);
 const targets = ref([]);
 const statuses = ref({});
@@ -85,7 +87,8 @@ const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "content compact" },
+    ...{ class: "content compact services-page" },
+    ...{ class: (`role-${__VLS_ctx.auth.role}`) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "hero-row" },
@@ -360,6 +363,7 @@ if (!__VLS_ctx.visibleTargets.length) {
 }
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
+/** @type {__VLS_StyleScopedClasses['services-page']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['eyebrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-actions']} */ ;
@@ -410,6 +414,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             Server: Server,
             TriangleAlert: TriangleAlert,
             router: router,
+            auth: auth,
             projects: projects,
             statuses: statuses,
             checking: checking,

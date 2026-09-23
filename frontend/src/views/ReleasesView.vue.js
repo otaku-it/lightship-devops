@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import ModalShell from '../components/ModalShell.vue';
 import StatusTrack from '../components/StatusTrack.vue';
 import { parseApiDate } from '../utils/datetime';
+import { useAuthStore } from '../stores/auth';
 const releases = ref([]);
 const projects = ref([]);
 const environments = ref([]);
@@ -21,6 +22,9 @@ const saving = ref(false);
 const error = ref('');
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
+const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role));
+const canManage = computed(() => ['admin', 'release_manager'].includes(auth.role));
 let timer;
 const form = reactive({ project_id: 0, environment_id: 0, version: '1.0.0', branch: 'main', strategy: 'rolling', artifact_url: '', notes: '' });
 const visible = computed(() => releases.value.filter((item) => filter.value === 'all' || item.status === filter.value));
@@ -51,7 +55,8 @@ function selectProject(projectId) {
 }
 function targetCount(environmentId) { return targets.value.filter((item) => item.project_id === form.project_id && item.environment_id === environmentId).length; }
 function readyTargetCount(environmentId) { return targets.value.filter((item) => item.project_id === form.project_id && item.environment_id === environmentId && item.connection_type === 'ssh' && item.status === 'online' && item.credential_configured).length; }
-function openCreate() { error.value = ''; showCreate.value = true; }
+function openCreate() { if (!canOperate.value)
+    return; error.value = ''; showCreate.value = true; }
 function configureTargets() { router.push(`/environments?project_id=${form.project_id}&create=1`); }
 async function createRelease() {
     error.value = '';
@@ -95,6 +100,8 @@ function waitingMinutes(item) {
 function stepLabel(status) { return { running: '执行中', success: '已完成', failed: '失败', simulated: '仅模拟' }[status] || '等待中'; }
 function closeRelease() { logExpanded.value = false; selected.value = null; }
 function requestDelete(release) {
+    if (!canManage.value)
+        return;
     if (['pending', 'running'].includes(release.status))
         return;
     deleteError.value = '';
@@ -168,7 +175,8 @@ const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "content compact" },
+    ...{ class: "content compact releases-page" },
+    ...{ class: (`role-${__VLS_ctx.auth.role}`) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "hero-row" },
@@ -846,6 +854,7 @@ if (__VLS_ctx.logExpanded && __VLS_ctx.selected) {
 var __VLS_72;
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
+/** @type {__VLS_StyleScopedClasses['releases-page']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['eyebrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary-button']} */ ;
@@ -967,6 +976,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             refreshingLogs: refreshingLogs,
             saving: saving,
             error: error,
+            auth: auth,
             form: form,
             visible: visible,
             selectedProject: selectedProject,

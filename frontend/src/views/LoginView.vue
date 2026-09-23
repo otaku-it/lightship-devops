@@ -4,8 +4,8 @@ import { useRouter } from 'vue-router'
 import { ArrowRight, LockKeyhole, ShipWheel, UserRound } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 
-const username = ref('admin')
-const password = ref('change-me-now')
+const username = ref('')
+const password = ref('')
 const loading = ref(false)
 const error = ref('')
 const auth = useAuthStore()
@@ -44,4 +44,3 @@ async function submit() {
     </section>
   </main>
 </template>
-

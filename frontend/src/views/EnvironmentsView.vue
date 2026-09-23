@@ -6,6 +6,7 @@ import { api } from '../api/client'
 import ModalShell from '../components/ModalShell.vue'
 import type { DeploymentTarget, Environment, Project } from '../types'
 import { parseApiDate } from '../utils/datetime'
+import { useAuthStore } from '../stores/auth'
 
 const targets = ref<DeploymentTarget[]>([])
 const environments = ref<Environment[]>([])
@@ -26,6 +27,8 @@ const saving = ref(false)
 const readyProjectId = ref<number | null>(null)
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
+const canManage = computed(() => ['admin', 'release_manager'].includes(auth.role))
 const form = reactive({ project_id: 0, environment_id: 0, name: '', connection_type: 'ssh', address: '', port: 22, username: 'deploy', auth_type: 'password', password: '', private_key: '', passphrase: '', host_key_fingerprint: '', trust_on_first_use: true, service_port: 8080, deploy_path: '/opt/apps/{project}/releases/{version}', start_command: 'systemctl restart {project}', stop_command: 'systemctl stop {project}', health_check_command: 'curl --fail http://127.0.0.1:{service_port}/health' })
 const projectTargets = computed(() => selectedProjectId.value
   ? targets.value.filter((item) => item.project_id === selectedProjectId.value)
@@ -61,6 +64,7 @@ async function load() {
   if (!form.project_id && projects.value.length) form.project_id = projects.value[0].id
 }
 function openCreate() {
+  if (!canManage.value) return
   editingId.value = null
   Object.assign(form, { name:'', connection_type:'ssh', address:'', port:22, username:'deploy', auth_type:'password', password:'', private_key:'', passphrase:'', host_key_fingerprint:'', trust_on_first_use:true, service_port:8080, deploy_path:'/opt/apps/{project}/releases/{version}', start_command:'systemctl restart {project}', stop_command:'systemctl stop {project}', health_check_command:'curl --fail http://127.0.0.1:{service_port}/health' })
   if (environments.value.length) form.environment_id = environments.value.at(-1)!.id
@@ -69,6 +73,7 @@ function openCreate() {
   step.value = 2; error.value = ''; message.value = ''; readyProjectId.value = null; showCreate.value = true
 }
 function openEdit(target: DeploymentTarget) {
+  if (!canManage.value) return
   editingId.value = target.id
   Object.assign(form, { ...target, password:'', private_key:'', passphrase:'' })
   step.value = 2; error.value = ''; message.value = ''; showCreate.value = true
@@ -118,6 +123,7 @@ async function saveTarget() {
   finally { saving.value = false }
 }
 function requestDelete(target: DeploymentTarget) {
+  if (!canManage.value) return
   deleteError.value = ''
   deleteCandidate.value = target
 }
@@ -150,7 +156,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="content compact">
+  <div class="content compact environments-page" :class="`role-${auth.role}`">
     <div class="hero-row"><div><div class="eyebrow">Release environments</div><h1>发布环境</h1><p>把服务器按测试、预发、生产分组；发起发布时选择一个环境，平台会发布到该组服务器。</p></div><button class="primary-button" @click="openCreate"><Plus />{{ selectedProject?`为 ${selectedProject.name} 添加服务器`:'添加目标服务器' }}</button></div>
 
     <section class="environment-explainer">

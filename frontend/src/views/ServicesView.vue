@@ -4,9 +4,11 @@ import { CheckCircle2, CircleAlert, Container, Pause, Play, RefreshCw, RotateCw,
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api/client'
 import type { DeploymentTarget, Project, ServiceStatus } from '../types'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const projects = ref<Project[]>([])
 const targets = ref<DeploymentTarget[]>([])
 const statuses = ref<Record<number, ServiceStatus>>({})
@@ -74,7 +76,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="content compact">
+  <div class="content compact services-page" :class="`role-${auth.role}`">
     <div class="hero-row"><div><div class="eyebrow">Runtime observability</div><h1>服务运行状态</h1><p>这里展示目标服务器上应用的真实运行状态，不等同于 SSH 连接状态。点击刷新会登录服务器执行实际检查。</p></div><div class="hero-actions"><button class="secondary-button" @click="router.push('/environments')"><Server />管理服务器</button><button class="primary-button" :disabled="loading || !visibleTargets.length" @click="checkAll"><RefreshCw :class="{spin:loading}" />刷新全部状态</button></div></div>
     <div class="service-scope"><div><strong>查看项目服务</strong><span>按项目查看生产、预发、测试环境的运行情况</span></div><select v-model.number="selectedProjectId" @change="changeProject"><option :value="0">所有项目</option><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option></select><span v-if="selectedProject" class="scope-result">当前项目：{{ selectedProject.name }}</span></div>
     <div class="service-summary"><div class="service-summary-card good"><span>运行中</span><strong>{{ runningCount }}</strong><small>真实检查通过</small></div><div class="service-summary-card danger"><span>异常</span><strong>{{ problemCount }}</strong><small>停止、健康异常或不可达</small></div><div class="service-summary-card pending"><span>待检查</span><strong>{{ pendingCount }}</strong><small>尚未返回状态</small></div><div class="service-summary-card"><span>目标服务器</span><strong>{{ visibleTargets.length }}</strong><small>当前项目范围</small></div></div>

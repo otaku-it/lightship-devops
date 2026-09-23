@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Activity, AlertTriangle, CheckCircle2, Container, GitBranch, LoaderCircle, Pencil, Plus, Rocket, Server, ShieldCheck, Trash2, WandSparkles } from 'lucide-vue-next';
 import { api } from '../api/client';
 import ModalShell from '../components/ModalShell.vue';
+import { useAuthStore } from '../stores/auth';
 const projects = ref([]);
 const targets = ref([]);
 const filter = ref('all');
@@ -19,6 +20,9 @@ const saving = ref(false);
 const error = ref('');
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
+const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role));
+const canManage = computed(() => ['admin', 'release_manager'].includes(auth.role));
 const form = reactive({ name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' });
 const visible = computed(() => projects.value.filter((item) => (filter.value === 'all' || (filter.value === 'docker' ? item.deployment_mode === 'docker' : filter.value === 'compose' ? item.deployment_mode === 'compose' : item.project_type === filter.value)) && `${item.name}${item.description}`.toLowerCase().includes(search.value.toLowerCase())));
 const templates = {
@@ -48,6 +52,8 @@ function applyTemplate() {
         form.deployment_mode = 'compose';
 }
 function openCreate() {
+    if (!canOperate.value)
+        return;
     editingId.value = null;
     Object.assign(form, { name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' });
     applyTemplate();
@@ -62,6 +68,8 @@ function openDockerCreate() {
 function deploymentName(project) { return project.deployment_mode === 'compose' ? 'Compose' : project.deployment_mode === 'docker' ? 'Docker' : '文件'; }
 function deploymentDetail(project) { return project.deployment_mode === 'compose' ? `Compose: ${project.compose_file_path}` : project.deployment_mode === 'docker' ? `Dockerfile: ${project.dockerfile_path}` : project.credential_configured ? 'Git 凭证已配置' : '公开仓库 / 未配置凭证'; }
 function openEdit(project) {
+    if (!canOperate.value)
+        return;
     editingId.value = project.id;
     Object.assign(form, { ...project, git_token: '' });
     branches.value = [];
@@ -117,6 +125,8 @@ async function saveProject(configureAfterSave = false) {
     }
 }
 function requestDelete(project) {
+    if (!canManage.value)
+        return;
     deleteError.value = '';
     deleteCandidate.value = project;
 }
@@ -147,7 +157,8 @@ const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "content compact" },
+    ...{ class: "content compact projects-page" },
+    ...{ class: (`role-${__VLS_ctx.auth.role}`) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "hero-row" },
@@ -158,27 +169,29 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.h1, __VLS_intrinsicElements.h1)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "hero-actions" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-    ...{ onClick: (__VLS_ctx.openDockerCreate) },
-    ...{ class: "secondary-button docker-entry-button" },
-});
-const __VLS_0 = {}.Container;
-/** @type {[typeof __VLS_components.Container, ]} */ ;
-// @ts-ignore
-const __VLS_1 = __VLS_asFunctionalComponent(__VLS_0, new __VLS_0({}));
-const __VLS_2 = __VLS_1({}, ...__VLS_functionalComponentArgsRest(__VLS_1));
-__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-    ...{ onClick: (__VLS_ctx.openCreate) },
-    ...{ class: "primary-button" },
-});
-const __VLS_4 = {}.Plus;
-/** @type {[typeof __VLS_components.Plus, ]} */ ;
-// @ts-ignore
-const __VLS_5 = __VLS_asFunctionalComponent(__VLS_4, new __VLS_4({}));
-const __VLS_6 = __VLS_5({}, ...__VLS_functionalComponentArgsRest(__VLS_5));
+if (__VLS_ctx.canOperate) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "hero-actions" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.openDockerCreate) },
+        ...{ class: "secondary-button docker-entry-button" },
+    });
+    const __VLS_0 = {}.Container;
+    /** @type {[typeof __VLS_components.Container, ]} */ ;
+    // @ts-ignore
+    const __VLS_1 = __VLS_asFunctionalComponent(__VLS_0, new __VLS_0({}));
+    const __VLS_2 = __VLS_1({}, ...__VLS_functionalComponentArgsRest(__VLS_1));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.openCreate) },
+        ...{ class: "primary-button" },
+    });
+    const __VLS_4 = {}.Plus;
+    /** @type {[typeof __VLS_components.Plus, ]} */ ;
+    // @ts-ignore
+    const __VLS_5 = __VLS_asFunctionalComponent(__VLS_4, new __VLS_4({}));
+    const __VLS_6 = __VLS_5({}, ...__VLS_functionalComponentArgsRest(__VLS_5));
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
     ...{ class: "docker-capability-banner" },
 });
@@ -815,6 +828,7 @@ if (__VLS_ctx.deleteCandidate) {
 }
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
+/** @type {__VLS_StyleScopedClasses['projects-page']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['eyebrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['hero-actions']} */ ;
@@ -948,6 +962,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             branchesMessage: branchesMessage,
             saving: saving,
             error: error,
+            auth: auth,
+            canOperate: canOperate,
             form: form,
             visible: visible,
             projectTargets: projectTargets,

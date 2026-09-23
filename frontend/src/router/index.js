@@ -6,6 +6,8 @@ import LoginView from '../views/LoginView.vue';
 import ProjectsView from '../views/ProjectsView.vue';
 import ReleasesView from '../views/ReleasesView.vue';
 import ServicesView from '../views/ServicesView.vue';
+import SettingsView from '../views/SettingsView.vue';
+import ComingSoonView from '../views/ComingSoonView.vue';
 const router = createRouter({
     history: createWebHistory(),
     routes: [
@@ -19,6 +21,9 @@ const router = createRouter({
                 { path: 'releases', name: 'releases', component: ReleasesView },
                 { path: 'environments', name: 'environments', component: EnvironmentsView },
                 { path: 'services', name: 'services', component: ServicesView },
+                { path: 'settings', name: 'settings', component: SettingsView },
+                { path: 'artifacts', name: 'artifacts', component: ComingSoonView },
+                { path: 'audit', name: 'audit', component: ComingSoonView },
             ],
         },
     ],

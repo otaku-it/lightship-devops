@@ -5,6 +5,7 @@ import { Activity, AlertTriangle, CheckCircle2, Container, GitBranch, LoaderCirc
 import { api } from '../api/client'
 import ModalShell from '../components/ModalShell.vue'
 import type { DeploymentTarget, Project } from '../types'
+import { useAuthStore } from '../stores/auth'
 
 const projects = ref<Project[]>([])
 const targets = ref<DeploymentTarget[]>([])
@@ -22,6 +23,9 @@ const saving = ref(false)
 const error = ref('')
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
+const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role))
+const canManage = computed(() => ['admin', 'release_manager'].includes(auth.role))
 const form = reactive({ name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' })
 
 const visible = computed(() => projects.value.filter((item) => (filter.value === 'all' || (filter.value === 'docker' ? item.deployment_mode === 'docker' : filter.value === 'compose' ? item.deployment_mode === 'compose' : item.project_type === filter.value)) && `${item.name}${item.description}`.toLowerCase().includes(search.value.toLowerCase())))
@@ -52,6 +56,7 @@ function applyTemplate() {
   if (form.project_type === 'fullstack') form.deployment_mode = 'compose'
 }
 function openCreate() {
+  if (!canOperate.value) return
   editingId.value = null
   Object.assign(form, { name:'', description:'', project_type:'java', repository_url:'', default_branch:'main', deployment_mode:'file', dockerfile_path:'Dockerfile', docker_image_name:'', docker_container_port:8080, docker_run_args:'', compose_file_path:'docker-compose.yml', compose_project_name:'', git_username:'', git_token:'' })
   applyTemplate()
@@ -66,6 +71,7 @@ function openDockerCreate() {
 function deploymentName(project: Project) { return project.deployment_mode === 'compose' ? 'Compose' : project.deployment_mode === 'docker' ? 'Docker' : '文件' }
 function deploymentDetail(project: Project) { return project.deployment_mode === 'compose' ? `Compose: ${project.compose_file_path}` : project.deployment_mode === 'docker' ? `Dockerfile: ${project.dockerfile_path}` : project.credential_configured ? 'Git 凭证已配置' : '公开仓库 / 未配置凭证' }
 function openEdit(project: Project) {
+  if (!canOperate.value) return
   editingId.value = project.id
   Object.assign(form, { ...project, git_token: '' })
   branches.value = []
@@ -110,6 +116,7 @@ async function saveProject(configureAfterSave = false) {
   finally { saving.value = false }
 }
 function requestDelete(project: Project) {
+  if (!canManage.value) return
   deleteError.value = ''
   deleteCandidate.value = project
 }
@@ -135,8 +142,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="content compact">
-    <div class="hero-row"><div><div class="eyebrow">Project registry</div><h1>项目与流水线</h1><p>单体项目可用文件或单容器发布，包含前后端、数据库等多个服务的工程可直接用 Docker Compose 发布。</p></div><div class="hero-actions"><button class="secondary-button docker-entry-button" @click="openDockerCreate"><Container />接入容器项目</button><button class="primary-button" @click="openCreate"><Plus />接入新项目</button></div></div>
+  <div class="content compact projects-page" :class="`role-${auth.role}`">
+    <div class="hero-row"><div><div class="eyebrow">Project registry</div><h1>项目与流水线</h1><p>单体项目可用文件或单容器发布，包含前端、数据库等多个服务的工程可直接用 Docker Compose 发布。</p></div><div v-if="canOperate" class="hero-actions"><button class="secondary-button docker-entry-button" @click="openDockerCreate"><Container />接入容器项目</button><button class="primary-button" @click="openCreate"><Plus />接入新项目</button></div></div>
     <section class="docker-capability-banner"><span class="docker-capability-icon"><Container /></span><div><strong>前后端一体化工程已支持</strong><p>选择 Docker Compose 后，平台会上传整个仓库，在服务器构建并更新全部服务；失败会自动恢复上一版。</p></div><span class="tiny-pill">真实执行</span></section>
     <div class="toolbar"><div class="filter-tabs"><button v-for="item in [{k:'all',n:'全部'},{k:'java',n:'Java'},{k:'frontend',n:'Frontend'},{k:'python',n:'Python'},{k:'docker',n:'Docker'},{k:'compose',n:'Compose'}]" :key="item.k" class="filter-tab" :class="{active:filter===item.k}" @click="filter=item.k">{{ item.n }}</button></div><div class="toolbar-spacer" /><input v-model="search" class="mini-search" placeholder="搜索项目" /><span class="tiny-pill">{{ visible.length }} 个项目</span></div>
     <div class="project-grid"><article v-for="project in visible" :key="project.id" class="project-card"><div class="project-card-top"><div class="project-glyph" :class="project.deployment_mode!=='file'?'docker':project.project_type">{{ project.deployment_mode==='compose'?'COMP':project.deployment_mode==='docker'?'DOCK':project.project_type.slice(0,4).toUpperCase() }}</div><div class="project-card-actions"><button class="secondary-button" @click="openEdit(project)"><Pencil />配置</button><button class="icon-button delete-icon-button" title="删除项目" aria-label="删除项目" @click="requestDelete(project)"><Trash2 /></button></div></div><h3>{{ project.name }}</h3><p>{{ project.description || '暂无项目描述' }}</p><div class="project-readiness" :class="{ready:readyTargetCount(project.id)>0}"><component :is="readyTargetCount(project.id)>0?CheckCircle2:Server" /><div><strong>{{ readyTargetCount(project.id)>0?'已具备发布条件':'还不能发布' }}</strong><span>{{ projectTargets(project.id).length ? `${projectTargets(project.id).length} 台服务器，${readyTargetCount(project.id)} 台可用` : '请先为项目配置目标服务器' }}</span></div></div><div class="project-card-stats"><div class="project-stat"><span>发布次数</span><strong>{{ project.release_count }}</strong></div><div class="project-stat"><span>成功率</span><strong>{{ project.release_count ? `${project.success_rate}%` : '--' }}</strong></div><div class="project-stat"><span>部署方式</span><strong>{{ deploymentName(project) }}</strong></div></div><div class="project-card-foot"><div class="branch"><GitBranch />{{ project.default_branch }}</div><div class="project-health"><i class="health-dot" :class="{warn:project.repository_url.startsWith('https')&&!project.credential_configured}" />{{ deploymentDetail(project) }}</div></div><div class="project-quick-actions project-quick-actions-three"><button class="secondary-button" @click="viewServiceStatus(project.id)"><Activity />运行状态</button><button class="secondary-button" @click="configureTargets(project.id)"><Server />{{ projectTargets(project.id).length?'管理服务器':'配置服务器' }}</button><button class="primary-button" :disabled="!readyTargetCount(project.id)" @click="releaseProject(project.id)"><Rocket />发起发布</button></div></article></div>

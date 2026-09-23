@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_operator, require_release_manager
 from app.core.database import get_db
 from app.models.environment import DeploymentTarget, Environment, TargetAccess
 from app.models.project import Project
@@ -77,7 +77,7 @@ def list_environments(
 def create_environment(
     payload: EnvironmentCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_release_manager),
 ) -> EnvironmentRead:
     environment = Environment(**payload.model_dump())
     db.add(environment)
@@ -98,7 +98,7 @@ def list_targets(
 def create_target(
     payload: TargetCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_release_manager),
 ) -> TargetRead:
     if not db.get(Project, payload.project_id):
         raise HTTPException(status_code=404, detail="项目不存在")
@@ -129,7 +129,7 @@ def update_target(
     target_id: int,
     payload: TargetCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_release_manager),
 ) -> TargetRead:
     target = db.get(DeploymentTarget, target_id)
     if not target:
@@ -167,7 +167,7 @@ def update_target(
 def delete_target(
     target_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_release_manager),
 ) -> Response:
     target = db.get(DeploymentTarget, target_id)
     if not target:
@@ -192,7 +192,7 @@ def test_target(
     target_id: int,
     payload: ConnectionTestRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_release_manager),
 ) -> ConnectionTestResult:
     target = db.get(DeploymentTarget, target_id)
     if not target:
@@ -287,7 +287,7 @@ def control_service(
     target_id: int,
     payload: ServiceControlRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_release_manager),
 ) -> ServiceControlRead:
     if payload.action not in {"stop", "start", "restart"}:
         raise HTTPException(status_code=422, detail="服务操作只支持 stop、start 或 restart")

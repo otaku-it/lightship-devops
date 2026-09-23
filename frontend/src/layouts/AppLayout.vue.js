@@ -18,7 +18,8 @@ const nav = [
     { to: '/environments', name: 'environments', label: '发布环境', icon: Server },
     { to: '/services', name: 'services', label: '服务状态', icon: Activity },
 ];
-const titles = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境', services: '服务状态' };
+const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role));
+const titles = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境', services: '服务状态', settings: '平台设置', artifacts: '制品库', audit: '审计日志' };
 const title = computed(() => titles[String(route.name)] || '轻舟');
 const searchResults = computed(() => {
     const keyword = search.value.trim().toLowerCase();
@@ -67,6 +68,7 @@ function handleSearchShortcut(event) {
     }
 }
 onMounted(() => {
+    auth.syncMe().catch(() => undefined);
     loadSearchData();
     window.addEventListener('keydown', handleSearchShortcut);
 });
@@ -144,9 +146,10 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.nav))) {
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ onClick: (...[$event]) => {
-            __VLS_ctx.router.push('/environments');
+            __VLS_ctx.router.push('/artifacts');
         } },
     ...{ class: "nav-item" },
+    ...{ class: ({ active: __VLS_ctx.route.name === 'artifacts' }) },
 });
 const __VLS_16 = {}.Box;
 /** @type {[typeof __VLS_components.Box, ]} */ ;
@@ -156,9 +159,10 @@ const __VLS_18 = __VLS_17({}, ...__VLS_functionalComponentArgsRest(__VLS_17));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ onClick: (...[$event]) => {
-            __VLS_ctx.router.push('/releases');
+            __VLS_ctx.router.push('/audit');
         } },
     ...{ class: "nav-item" },
+    ...{ class: ({ active: __VLS_ctx.route.name === 'audit' }) },
 });
 const __VLS_20 = {}.Layers3;
 /** @type {[typeof __VLS_components.Layers3, ]} */ ;
@@ -173,7 +177,11 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.nav, __VLS_intrinsicElements.n
     ...{ class: "nav-list" },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+    ...{ onClick: (...[$event]) => {
+            __VLS_ctx.router.push('/settings');
+        } },
     ...{ class: "nav-item" },
+    ...{ class: ({ active: __VLS_ctx.route.name === 'settings' }) },
 });
 const __VLS_24 = {}.Settings;
 /** @type {[typeof __VLS_components.Settings, ]} */ ;
@@ -303,17 +311,21 @@ const __VLS_32 = {}.Bell;
 // @ts-ignore
 const __VLS_33 = __VLS_asFunctionalComponent(__VLS_32, new __VLS_32({}));
 const __VLS_34 = __VLS_33({}, ...__VLS_functionalComponentArgsRest(__VLS_33));
-__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-    ...{ onClick: (...[$event]) => {
-            __VLS_ctx.router.push('/releases?create=1');
-        } },
-    ...{ class: "primary-button" },
-});
-const __VLS_36 = {}.Plus;
-/** @type {[typeof __VLS_components.Plus, ]} */ ;
-// @ts-ignore
-const __VLS_37 = __VLS_asFunctionalComponent(__VLS_36, new __VLS_36({}));
-const __VLS_38 = __VLS_37({}, ...__VLS_functionalComponentArgsRest(__VLS_37));
+if (__VLS_ctx.canOperate) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.canOperate))
+                    return;
+                __VLS_ctx.router.push('/releases?create=1');
+            } },
+        ...{ class: "primary-button" },
+    });
+    const __VLS_36 = {}.Plus;
+    /** @type {[typeof __VLS_components.Plus, ]} */ ;
+    // @ts-ignore
+    const __VLS_37 = __VLS_asFunctionalComponent(__VLS_36, new __VLS_36({}));
+    const __VLS_38 = __VLS_37({}, ...__VLS_functionalComponentArgsRest(__VLS_37));
+}
 const __VLS_40 = {}.RouterView;
 /** @type {[typeof __VLS_components.RouterView, typeof __VLS_components.routerView, ]} */ ;
 // @ts-ignore
@@ -331,10 +343,13 @@ const __VLS_42 = __VLS_41({}, ...__VLS_functionalComponentArgsRest(__VLS_41));
 /** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['sidebar-foot']} */ ;
 /** @type {__VLS_StyleScopedClasses['runner-health']} */ ;
 /** @type {__VLS_StyleScopedClasses['runner-health-head']} */ ;
@@ -377,6 +392,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             searchInput: searchInput,
             searchLoading: searchLoading,
             nav: nav,
+            canOperate: canOperate,
             title: title,
             searchResults: searchResults,
             loadSearchData: loadSearchData,

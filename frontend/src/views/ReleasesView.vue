@@ -7,6 +7,7 @@ import ModalShell from '../components/ModalShell.vue'
 import StatusTrack from '../components/StatusTrack.vue'
 import type { DeploymentTarget, Environment, Project, Release } from '../types'
 import { parseApiDate } from '../utils/datetime'
+import { useAuthStore } from '../stores/auth'
 
 const releases = ref<Release[]>([])
 const projects = ref<Project[]>([])
@@ -24,6 +25,9 @@ const saving = ref(false)
 const error = ref('')
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
+const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role))
+const canManage = computed(() => ['admin', 'release_manager'].includes(auth.role))
 let timer: number | undefined
 const form = reactive({ project_id: 0, environment_id: 0, version: '1.0.0', branch: 'main', strategy: 'rolling', artifact_url: '', notes: '' })
 const visible = computed(() => releases.value.filter((item) => filter.value === 'all' || item.status === filter.value))
@@ -50,7 +54,7 @@ function selectProject(projectId: number) {
 }
 function targetCount(environmentId: number) { return targets.value.filter((item) => item.project_id === form.project_id && item.environment_id === environmentId).length }
 function readyTargetCount(environmentId: number) { return targets.value.filter((item) => item.project_id === form.project_id && item.environment_id === environmentId && item.connection_type === 'ssh' && item.status === 'online' && item.credential_configured).length }
-function openCreate() { error.value = ''; showCreate.value = true }
+function openCreate() { if (!canOperate.value) return; error.value = ''; showCreate.value = true }
 function configureTargets() { router.push(`/environments?project_id=${form.project_id}&create=1`) }
 async function createRelease() {
   error.value = ''
@@ -76,6 +80,7 @@ function waitingMinutes(item: Release) {
 function stepLabel(status: string) { return ({ running: '执行中', success: '已完成', failed: '失败', simulated: '仅模拟' } as Record<string, string>)[status] || '等待中' }
 function closeRelease() { logExpanded.value = false; selected.value = null }
 function requestDelete(release: Release) {
+  if (!canManage.value) return
   if (['pending', 'running'].includes(release.status)) return
   deleteError.value = ''
   deleteCandidate.value = release
@@ -132,7 +137,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="content compact">
+  <div class="content compact releases-page" :class="`role-${auth.role}`">
     <div class="hero-row"><div><div class="eyebrow">Delivery history</div><h1>发布记录</h1><p>真实拉取仓库，并通过 SSH 将文件、Docker 或 Docker Compose 工程发布到目标服务器。</p></div><button class="primary-button" @click="openCreate"><Plus />发起发布</button></div>
     <div class="toolbar"><div class="filter-tabs"><button v-for="item in [{k:'all',n:'全部'},{k:'success',n:'成功'},{k:'running',n:'进行中'},{k:'failed',n:'失败'},{k:'simulated',n:'仅模拟'}]" :key="item.k" class="filter-tab" :class="{active:filter===item.k}" @click="filter=item.k">{{ item.n }}</button></div><div class="toolbar-spacer" /><button class="secondary-button" @click="load"><RefreshCw />刷新</button></div>
     <section class="panel"><div class="pipeline-list"><div v-for="release in visible" :key="release.id" class="pipeline-row" @click="selected=release"><div class="project-cell"><div class="project-glyph" :class="release.project_type">{{ release.project_type.slice(0,4).toUpperCase() }}</div><div><strong>{{ release.project_name }}</strong><span>v{{ release.version }} · {{ release.release_no }}</span></div></div><div><span class="env-pill" :class="{prod:release.environment_name==='生产环境'}">{{ release.environment_name }}</span></div><StatusTrack :stage="release.current_stage" :status="release.status" /><div class="duration">{{ duration(release) }}<span>{{ release.created_by }}</span></div><div class="pipeline-row-actions"><button class="row-delete-button" :disabled="['pending','running'].includes(release.status)" :title="['pending','running'].includes(release.status)?'进行中的发布不能删除':'删除发布记录'" aria-label="删除发布记录" @click.stop="requestDelete(release)"><Trash2 /></button><span>›</span></div></div><div v-if="!visible.length" class="list-empty">当前筛选条件下没有发布记录。</div></div></section>
