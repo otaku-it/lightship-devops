@@ -8,8 +8,14 @@ from app.models.environment import DeploymentTarget
 from app.models.project import Project, ProjectCredential
 from app.models.release import Release
 from app.models.user import User
-from app.schemas.project import ProjectCreate, ProjectRead
-from app.services.credentials import encrypt_secret
+from app.schemas.project import (
+    ProjectCreate,
+    ProjectRead,
+    RepositoryBranchesRead,
+    RepositoryBranchesRequest,
+)
+from app.services.credentials import decrypt_secret, encrypt_secret
+from app.services.git_repository import list_remote_branches
 
 router = APIRouter(prefix="/projects", tags=["项目"])
 
@@ -72,6 +78,34 @@ def create_project(
     db.commit()
     db.refresh(project)
     return project_read(project, db)
+
+
+@router.post("/branches", response_model=RepositoryBranchesRead)
+def get_repository_branches(
+    payload: RepositoryBranchesRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> RepositoryBranchesRead:
+    project = db.get(Project, payload.project_id) if payload.project_id else None
+    if payload.project_id and not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    repository_url = payload.repository_url.strip() or (project.repository_url if project else "")
+    if not repository_url:
+        raise HTTPException(status_code=422, detail="请先填写 Git 仓库地址")
+    credential = project.credential if project else None
+    username = payload.git_username or (credential.username if credential else "")
+    try:
+        token = payload.git_token or decrypt_secret(
+            credential.token_encrypted if credential else ""
+        )
+        branches, default_branch = list_remote_branches(
+            repository_url,
+            username=username,
+            token=token,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return RepositoryBranchesRead(branches=branches, default_branch=default_branch)
 
 
 @router.put("/{project_id}", response_model=ProjectRead)

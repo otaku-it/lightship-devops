@@ -1,6 +1,6 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { AlertTriangle, CheckCircle2, Container, GitBranch, Pencil, Plus, Rocket, Server, ShieldCheck, Trash2 } from 'lucide-vue-next';
+import { AlertTriangle, CheckCircle2, Container, GitBranch, LoaderCircle, Pencil, Plus, Rocket, Server, ShieldCheck, Trash2, WandSparkles } from 'lucide-vue-next';
 import { api } from '../api/client';
 import ModalShell from '../components/ModalShell.vue';
 const projects = ref([]);
@@ -12,6 +12,9 @@ const editingId = ref(null);
 const deleteCandidate = ref(null);
 const deleting = ref(false);
 const deleteError = ref('');
+const branches = ref([]);
+const branchesLoading = ref(false);
+const branchesMessage = ref('');
 const saving = ref(false);
 const error = ref('');
 const router = useRouter();
@@ -41,6 +44,8 @@ function openCreate() {
     editingId.value = null;
     Object.assign(form, { name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' });
     applyTemplate();
+    branches.value = [];
+    branchesMessage.value = '';
     showCreate.value = true;
 }
 function openDockerCreate() {
@@ -52,7 +57,36 @@ function deploymentDetail(project) { return project.deployment_mode === 'compose
 function openEdit(project) {
     editingId.value = project.id;
     Object.assign(form, { ...project, git_token: '' });
+    branches.value = [];
+    branchesMessage.value = '';
     showCreate.value = true;
+}
+async function detectBranches() {
+    branchesMessage.value = '';
+    if (!form.repository_url.trim()) {
+        branchesMessage.value = '请先填写 Git 仓库地址';
+        return;
+    }
+    branchesLoading.value = true;
+    try {
+        const { data } = await api.post('/projects/branches', {
+            project_id: editingId.value || undefined,
+            repository_url: form.repository_url,
+            git_username: form.git_username,
+            git_token: form.git_token,
+        });
+        branches.value = data.branches;
+        if (data.default_branch)
+            form.default_branch = data.default_branch;
+        branchesMessage.value = `已识别 ${data.branches.length} 个分支${data.default_branch ? `，默认分支：${data.default_branch}` : ''}`;
+    }
+    catch (exception) {
+        branches.value = [];
+        branchesMessage.value = exception.response?.data?.detail || '分支识别失败，请检查仓库地址和凭证';
+    }
+    finally {
+        branchesLoading.value = false;
+    }
 }
 async function saveProject(configureAfterSave = false) {
     error.value = '';
@@ -334,10 +368,22 @@ if (__VLS_ctx.showCreate) {
     };
     __VLS_38.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "modal-body" },
+        ...{ class: "project-config-scroll" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "project-source-section" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "form-grid" },
+        ...{ class: "project-form-section-head" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "section-step" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "project-source-grid" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full" },
@@ -371,8 +417,104 @@ if (__VLS_ctx.showCreate) {
         ...{ class: "form-field" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({});
-    (__VLS_ctx.form.default_branch);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        placeholder: "https://git.example.com/team/project.git",
+    });
+    (__VLS_ctx.form.repository_url);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "form-field" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        placeholder: "公开仓库可留空",
+    });
+    (__VLS_ctx.form.git_username);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "form-field" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        type: "password",
+        placeholder: (__VLS_ctx.editingId ? '留空表示使用已保存凭证' : '私有仓库填写'),
+    });
+    (__VLS_ctx.form.git_token);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "form-field full branch-field" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "branch-discovery-controls" },
+    });
+    if (__VLS_ctx.branches.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
+            value: (__VLS_ctx.form.default_branch),
+        });
+        for (const [branch] of __VLS_getVForSourceType((__VLS_ctx.branches))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+                key: (branch),
+                value: (branch),
+            });
+            (branch);
+        }
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            placeholder: "例如 main；可手动填写",
+        });
+        (__VLS_ctx.form.default_branch);
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.detectBranches) },
+        type: "button",
+        ...{ class: "secondary-button" },
+        disabled: (__VLS_ctx.branchesLoading || !__VLS_ctx.form.repository_url.trim()),
+    });
+    if (__VLS_ctx.branchesLoading) {
+        const __VLS_43 = {}.LoaderCircle;
+        /** @type {[typeof __VLS_components.LoaderCircle, ]} */ ;
+        // @ts-ignore
+        const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({
+            ...{ class: "spin" },
+        }));
+        const __VLS_45 = __VLS_44({
+            ...{ class: "spin" },
+        }, ...__VLS_functionalComponentArgsRest(__VLS_44));
+    }
+    else {
+        const __VLS_47 = {}.WandSparkles;
+        /** @type {[typeof __VLS_components.WandSparkles, ]} */ ;
+        // @ts-ignore
+        const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({}));
+        const __VLS_49 = __VLS_48({}, ...__VLS_functionalComponentArgsRest(__VLS_48));
+    }
+    (__VLS_ctx.branchesLoading ? '正在读取...' : '识别远程分支');
+    if (__VLS_ctx.branchesMessage) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
+            ...{ class: "branch-message" },
+            ...{ class: ({ error: __VLS_ctx.branches.length === 0 && !__VLS_ctx.branchesLoading }) },
+        });
+        (__VLS_ctx.branchesMessage);
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "security-note full compact-security-note" },
+    });
+    const __VLS_51 = {}.ShieldCheck;
+    /** @type {[typeof __VLS_components.ShieldCheck, ]} */ ;
+    // @ts-ignore
+    const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
+    const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "modal-body" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "form-grid" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full" },
     });
@@ -398,11 +540,11 @@ if (__VLS_ctx.showCreate) {
         type: "button",
         ...{ class: ({ active: __VLS_ctx.form.deployment_mode === 'docker' }) },
     });
-    const __VLS_43 = {}.Container;
+    const __VLS_55 = {}.Container;
     /** @type {[typeof __VLS_components.Container, ]} */ ;
     // @ts-ignore
-    const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({}));
-    const __VLS_45 = __VLS_44({}, ...__VLS_functionalComponentArgsRest(__VLS_44));
+    const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
+    const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.showCreate))
@@ -412,20 +554,12 @@ if (__VLS_ctx.showCreate) {
         type: "button",
         ...{ class: ({ active: __VLS_ctx.form.deployment_mode === 'compose' }) },
     });
-    const __VLS_47 = {}.Container;
+    const __VLS_59 = {}.Container;
     /** @type {[typeof __VLS_components.Container, ]} */ ;
     // @ts-ignore
-    const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({}));
-    const __VLS_49 = __VLS_48({}, ...__VLS_functionalComponentArgsRest(__VLS_48));
+    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
+    const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "form-field full" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        placeholder: "https://git.example.com/team/project.git",
-    });
-    (__VLS_ctx.form.repository_url);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full" },
     });
@@ -494,11 +628,11 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full docker-note" },
         });
-        const __VLS_51 = {}.Container;
+        const __VLS_63 = {}.Container;
         /** @type {[typeof __VLS_components.Container, ]} */ ;
         // @ts-ignore
-        const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
-        const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
+        const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({}));
+        const __VLS_65 = __VLS_64({}, ...__VLS_functionalComponentArgsRest(__VLS_64));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -525,43 +659,15 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full docker-note" },
         });
-        const __VLS_55 = {}.Container;
+        const __VLS_67 = {}.Container;
         /** @type {[typeof __VLS_components.Container, ]} */ ;
         // @ts-ignore
-        const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
-        const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
+        const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({}));
+        const __VLS_69 = __VLS_68({}, ...__VLS_functionalComponentArgsRest(__VLS_68));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "form-field" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        placeholder: "私有仓库填写",
-    });
-    (__VLS_ctx.form.git_username);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "form-field" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        type: "password",
-        placeholder: (__VLS_ctx.editingId ? '留空表示不修改' : '私有仓库填写'),
-    });
-    (__VLS_ctx.form.git_token);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "security-note full" },
-    });
-    const __VLS_59 = {}.ShieldCheck;
-    /** @type {[typeof __VLS_components.ShieldCheck, ]} */ ;
-    // @ts-ignore
-    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
-    const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     if (__VLS_ctx.error) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "error-text" },
@@ -601,51 +707,51 @@ if (__VLS_ctx.showCreate) {
         ...{ class: "primary-button" },
         disabled: (__VLS_ctx.saving),
     });
-    const __VLS_63 = {}.Server;
+    const __VLS_71 = {}.Server;
     /** @type {[typeof __VLS_components.Server, ]} */ ;
     // @ts-ignore
-    const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({}));
-    const __VLS_65 = __VLS_64({}, ...__VLS_functionalComponentArgsRest(__VLS_64));
+    const __VLS_72 = __VLS_asFunctionalComponent(__VLS_71, new __VLS_71({}));
+    const __VLS_73 = __VLS_72({}, ...__VLS_functionalComponentArgsRest(__VLS_72));
     (__VLS_ctx.saving ? '正在保存...' : '保存并配置服务器');
     var __VLS_38;
 }
 if (__VLS_ctx.deleteCandidate) {
     /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
     // @ts-ignore
-    const __VLS_67 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+    const __VLS_75 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
         ...{ 'onClose': {} },
         title: "删除项目",
         subtitle: "此操作不可恢复",
         size: "small",
     }));
-    const __VLS_68 = __VLS_67({
+    const __VLS_76 = __VLS_75({
         ...{ 'onClose': {} },
         title: "删除项目",
         subtitle: "此操作不可恢复",
         size: "small",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_67));
-    let __VLS_70;
-    let __VLS_71;
-    let __VLS_72;
-    const __VLS_73 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_75));
+    let __VLS_78;
+    let __VLS_79;
+    let __VLS_80;
+    const __VLS_81 = {
         onClose: (...[$event]) => {
             if (!(__VLS_ctx.deleteCandidate))
                 return;
             __VLS_ctx.deleteCandidate = null;
         }
     };
-    __VLS_69.slots.default;
+    __VLS_77.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "modal-body delete-confirm-body" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "delete-warning-icon" },
     });
-    const __VLS_74 = {}.AlertTriangle;
+    const __VLS_82 = {}.AlertTriangle;
     /** @type {[typeof __VLS_components.AlertTriangle, ]} */ ;
     // @ts-ignore
-    const __VLS_75 = __VLS_asFunctionalComponent(__VLS_74, new __VLS_74({}));
-    const __VLS_76 = __VLS_75({}, ...__VLS_functionalComponentArgsRest(__VLS_75));
+    const __VLS_83 = __VLS_asFunctionalComponent(__VLS_82, new __VLS_82({}));
+    const __VLS_84 = __VLS_83({}, ...__VLS_functionalComponentArgsRest(__VLS_83));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.deleteCandidate.name);
@@ -677,13 +783,13 @@ if (__VLS_ctx.deleteCandidate) {
         ...{ class: "danger-button" },
         disabled: (__VLS_ctx.deleting),
     });
-    const __VLS_78 = {}.Trash2;
+    const __VLS_86 = {}.Trash2;
     /** @type {[typeof __VLS_components.Trash2, ]} */ ;
     // @ts-ignore
-    const __VLS_79 = __VLS_asFunctionalComponent(__VLS_78, new __VLS_78({}));
-    const __VLS_80 = __VLS_79({}, ...__VLS_functionalComponentArgsRest(__VLS_79));
+    const __VLS_87 = __VLS_asFunctionalComponent(__VLS_86, new __VLS_86({}));
+    const __VLS_88 = __VLS_87({}, ...__VLS_functionalComponentArgsRest(__VLS_87));
     (__VLS_ctx.deleting ? '正在删除...' : '确认删除项目');
-    var __VLS_69;
+    var __VLS_77;
 }
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
@@ -725,12 +831,30 @@ if (__VLS_ctx.deleteCandidate) {
 /** @type {__VLS_StyleScopedClasses['project-quick-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['secondary-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary-button']} */ ;
-/** @type {__VLS_StyleScopedClasses['modal-body']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['project-config-scroll']} */ ;
+/** @type {__VLS_StyleScopedClasses['project-source-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['project-form-section-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['section-step']} */ ;
+/** @type {__VLS_StyleScopedClasses['project-source-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['full']} */ ;
+/** @type {__VLS_StyleScopedClasses['branch-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['branch-discovery-controls']} */ ;
+/** @type {__VLS_StyleScopedClasses['secondary-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['spin']} */ ;
+/** @type {__VLS_StyleScopedClasses['branch-message']} */ ;
+/** @type {__VLS_StyleScopedClasses['error']} */ ;
+/** @type {__VLS_StyleScopedClasses['security-note']} */ ;
+/** @type {__VLS_StyleScopedClasses['full']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-security-note']} */ ;
+/** @type {__VLS_StyleScopedClasses['modal-body']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['deployment-mode-choice']} */ ;
@@ -742,8 +866,6 @@ if (__VLS_ctx.deleteCandidate) {
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
-/** @type {__VLS_StyleScopedClasses['full']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
@@ -759,10 +881,6 @@ if (__VLS_ctx.deleteCandidate) {
 /** @type {__VLS_StyleScopedClasses['security-note']} */ ;
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['docker-note']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
-/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
-/** @type {__VLS_StyleScopedClasses['security-note']} */ ;
-/** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['error-text']} */ ;
 /** @type {__VLS_StyleScopedClasses['modal-foot']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost-button']} */ ;
@@ -784,12 +902,14 @@ const __VLS_self = (await import('vue')).defineComponent({
             CheckCircle2: CheckCircle2,
             Container: Container,
             GitBranch: GitBranch,
+            LoaderCircle: LoaderCircle,
             Pencil: Pencil,
             Plus: Plus,
             Rocket: Rocket,
             Server: Server,
             ShieldCheck: ShieldCheck,
             Trash2: Trash2,
+            WandSparkles: WandSparkles,
             ModalShell: ModalShell,
             filter: filter,
             search: search,
@@ -798,6 +918,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             deleteCandidate: deleteCandidate,
             deleting: deleting,
             deleteError: deleteError,
+            branches: branches,
+            branchesLoading: branchesLoading,
+            branchesMessage: branchesMessage,
             saving: saving,
             error: error,
             form: form,
@@ -812,6 +935,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             deploymentName: deploymentName,
             deploymentDetail: deploymentDetail,
             openEdit: openEdit,
+            detectBranches: detectBranches,
             saveProject: saveProject,
             requestDelete: requestDelete,
             deleteProject: deleteProject,

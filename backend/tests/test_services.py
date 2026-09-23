@@ -1,8 +1,10 @@
 import tarfile
+from types import SimpleNamespace
 
 from app.services.credentials import decrypt_secret, encrypt_secret
 from app.services.artifact_builder import ArtifactBuilder
 from app.services.executors.ssh import render_template
+from app.services.git_repository import list_remote_branches
 
 
 def test_credentials_round_trip():
@@ -17,6 +19,28 @@ def test_deployment_template_rendering():
         {"project": "demo", "version": "1.2.3"},
     )
     assert rendered == "/opt/apps/demo/releases/1.2.3"
+
+
+def test_list_remote_branches_parses_default_branch(monkeypatch):
+    import app.services.git_repository as git_repository
+
+    monkeypatch.setattr(
+        git_repository.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "ref: refs/heads/develop\tHEAD\n"
+                "abc\trefs/heads/main\n"
+                "def\trefs/heads/develop\n"
+                "ghi\trefs/heads/feature/login\n"
+            ),
+            stderr="",
+        ),
+    )
+    branches, default_branch = list_remote_branches("https://example.com/team/app.git")
+    assert default_branch == "develop"
+    assert branches == ["develop", "feature/login", "main"]
 
 
 def test_package_docker_context(tmp_path):

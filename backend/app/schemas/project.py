@@ -35,3 +35,15 @@ class ProjectRead(ProjectBase):
     git_username: str = ""
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RepositoryBranchesRequest(BaseModel):
+    project_id: int | None = None
+    repository_url: str = ""
+    git_username: str = ""
+    git_token: str = Field(default="", repr=False)
+
+
+class RepositoryBranchesRead(BaseModel):
+    branches: list[str]
+    default_branch: str = ""
