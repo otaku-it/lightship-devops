@@ -67,7 +67,7 @@ docker compose up --build
 - Web：http://localhost:8088
 - API 文档：http://localhost:8000/docs
 - 健康检查：http://localhost:8000/health
-- MySQL：仅在 Compose 内部网络通过 `mysql:3306` 访问，不对宿主机暴露端口
+- MySQL：Compose 内部通过 `mysql:3306` 访问；宿主机通过 `127.0.0.1:3308` 访问
 
 初始账号：
 
