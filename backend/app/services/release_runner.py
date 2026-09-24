@@ -14,6 +14,7 @@ from app.models.release import Release, ReleaseDeployment, ReleaseLog, ReleaseSt
 from app.services.artifact_builder import ArtifactBuilder
 from app.services.credentials import decrypt_secret
 from app.services.executors.factory import get_executor
+from app.services.platform_settings import load_platform_settings
 
 
 def append_log(db, release_id: int, message: str, level: str = "INFO") -> None:
@@ -56,6 +57,7 @@ def run_real_release(db, release: Release, steps: list[ReleaseStep]) -> None:
     credential = project.credential
     git_token = decrypt_secret(credential.token_encrypted if credential else "")
     git_username = credential.username if credential else ""
+    runtime_settings = load_platform_settings(db)
 
     with tempfile.TemporaryDirectory(prefix=f"lightship-{release.release_no}-") as temp_dir:
         builder = ArtifactBuilder(
@@ -63,6 +65,8 @@ def run_real_release(db, release: Release, steps: list[ReleaseStep]) -> None:
             log=lambda message, level="INFO": append_log(db, release.id, message, level),
             git_username=git_username,
             git_token=git_token,
+            build_timeout_seconds=runtime_settings.build_timeout_seconds,
+            max_build_log_lines=runtime_settings.max_build_log_lines,
         )
 
         set_step(db, release, steps[0], "running")
@@ -157,7 +161,7 @@ def run_real_release(db, release: Release, steps: list[ReleaseStep]) -> None:
             access = target.access
             assert access is not None
             append_log(db, release.id, f"[{target.name}] 开始真实 SSH 部署")
-            executor = get_executor(target.connection_type)
+            executor = get_executor(target.connection_type, runtime_settings)
             common_args = {
                 "archive_path": archive_path,
                 "project_name": project.name,

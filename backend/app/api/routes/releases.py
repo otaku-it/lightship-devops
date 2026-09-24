@@ -11,6 +11,7 @@ from app.models.release import Release, ReleaseStep
 from app.models.user import User
 from app.schemas.release import ReleaseCreate, ReleaseRead
 from app.services.release_runner import run_release
+from app.services.audit import record_audit
 
 router = APIRouter(prefix="/releases", tags=["发布"])
 
@@ -107,6 +108,15 @@ def create_release(
     )
     for sequence, name in enumerate(step_names, start=1):
         db.add(ReleaseStep(release_id=release.id, sequence=sequence, name=name))
+    record_audit(
+        db,
+        user,
+        action="release.create",
+        resource_type="release",
+        resource_id=release.id,
+        summary=f"发起发布 {release.release_no}",
+        detail={"project": project.name, "environment": environment.name, "branch": release.branch, "version": release.version},
+    )
     db.commit()
     item = db.scalars(release_query().where(Release.id == release.id)).unique().one()
     background_tasks.add_task(run_release, release.id)
@@ -129,13 +139,22 @@ def get_release(
 def delete_release(
     release_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_release_manager),
+    actor: User = Depends(require_release_manager),
 ) -> Response:
     release = db.get(Release, release_id)
     if not release:
         raise HTTPException(status_code=404, detail="发布单不存在")
     if release.status in {"pending", "running"}:
         raise HTTPException(status_code=409, detail="发布正在执行，不能删除")
+    release_no = release.release_no
     db.delete(release)
+    record_audit(
+        db,
+        actor,
+        action="release.delete",
+        resource_type="release",
+        resource_id=release_id,
+        summary=f"删除发布记录 {release_no}",
+    )
     db.commit()
     return Response(status_code=204)

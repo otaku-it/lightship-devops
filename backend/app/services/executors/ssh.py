@@ -61,6 +61,22 @@ def render_template(value: str, variables: dict[str, str | int]) -> str:
 
 
 class SSHExecutor:
+    def __init__(self, runtime_settings=None) -> None:
+        self.build_timeout_seconds = (
+            runtime_settings.build_timeout_seconds
+            if runtime_settings
+            else settings.build_timeout_seconds
+        )
+        self.command_timeout_seconds = (
+            runtime_settings.ssh_command_timeout_seconds
+            if runtime_settings
+            else settings.ssh_command_timeout_seconds
+        )
+        self.health_check_retries = (
+            runtime_settings.health_check_retries if runtime_settings else 10
+        )
+        self.auto_rollback = runtime_settings.auto_rollback if runtime_settings else True
+
     def _connect(
         self,
         target: DeploymentTarget,
@@ -97,18 +113,18 @@ class SSHExecutor:
             )
         return client, observed
 
-    @staticmethod
     def _run(
+        self,
         client: paramiko.SSHClient,
         command: str,
         timeout: int | None = None,
         on_output=None,
     ) -> tuple[int, str, str]:
         _, stdout, stderr = client.exec_command(
-            command, timeout=timeout or settings.ssh_command_timeout_seconds
+            command, timeout=timeout or self.command_timeout_seconds
         )
         channel = stdout.channel
-        deadline = time.monotonic() + (timeout or settings.ssh_command_timeout_seconds)
+        deadline = time.monotonic() + (timeout or self.command_timeout_seconds)
         output = bytearray()
         error = bytearray()
         emitted = bytearray()
@@ -467,7 +483,7 @@ class SSHExecutor:
                 f"code=$?; tail -n 80 {shlex.quote(build_log)}; rm -f {shlex.quote(build_log)}; exit $code"
             )
             code, output, error = self._run(
-                client, build_command, timeout=settings.build_timeout_seconds
+                client, build_command, timeout=self.build_timeout_seconds
             )
             build_tail = (output or error)[-3000:].strip()
             if build_tail:
@@ -490,11 +506,16 @@ class SSHExecutor:
                 raise RuntimeError(f"启动 Docker 容器失败：{error or output}")
             logs.append(f"容器 {container_name} 已切换到新镜像")
             if health_command:
+                retry_numbers = " ".join(str(item) for item in range(1, self.health_check_retries + 1))
                 retry_health = (
-                    f"for i in 1 2 3 4 5 6 7 8 9 10; do ({health_command}) && exit 0; "
+                    f"for i in {retry_numbers}; do ({health_command}) && exit 0; "
                     "sleep 2; done; exit 1"
                 )
-                code, output, error = self._run(client, retry_health, timeout=60)
+                code, output, error = self._run(
+                    client,
+                    retry_health,
+                    timeout=max(30, self.health_check_retries * 10),
+                )
                 if output:
                     logs.append(output[-2000:])
                 if code != 0:
@@ -508,7 +529,7 @@ class SSHExecutor:
                 logs=tuple(logs),
             )
         except Exception as exc:  # noqa: BLE001
-            if client and switched:
+            if client and switched and self.auto_rollback:
                 self._run(
                     client,
                     f"docker rm -f {shlex.quote(container_name)} >/dev/null 2>&1 || true",
@@ -621,7 +642,16 @@ class SSHExecutor:
                     raise RuntimeError(f"启动/重启命令失败：{error or output}")
                 logs.append("启动/重启命令执行成功")
             if health_command:
-                code, output, error = self._run(client, health_command)
+                retry_numbers = " ".join(str(item) for item in range(1, self.health_check_retries + 1))
+                retry_health = (
+                    f"for i in {retry_numbers}; do ({health_command}) && exit 0; "
+                    "sleep 2; done; exit 1"
+                )
+                code, output, error = self._run(
+                    client,
+                    retry_health,
+                    timeout=max(30, self.health_check_retries * 10),
+                )
                 if output:
                     logs.append(output[-2000:])
                 if code != 0:
@@ -635,7 +665,7 @@ class SSHExecutor:
                 logs=tuple(logs),
             )
         except Exception as exc:  # noqa: BLE001
-            if client and switched and previous_path:
+            if client and switched and previous_path and self.auto_rollback:
                 rollback = (
                     f"ln -sfn {shlex.quote(previous_path)} {shlex.quote(current_path)}"
                 )
@@ -724,7 +754,7 @@ class SSHExecutor:
             code, output, error = self._run(
                 client,
                 f"{compose} config --quiet",
-                timeout=settings.build_timeout_seconds,
+                timeout=self.build_timeout_seconds,
             )
             if code != 0:
                 raise RuntimeError(f"Compose 配置校验失败：{error or output}")
@@ -734,7 +764,7 @@ class SSHExecutor:
             build_command = f"{compose} build"
             if progress_callback:
                 progress_callback("开始执行 docker compose build，正在构建前后端及依赖服务")
-            code, output, error = self._run(client, build_command, timeout=settings.build_timeout_seconds, on_output=progress_callback)
+            code, output, error = self._run(client, build_command, timeout=self.build_timeout_seconds, on_output=progress_callback)
             if (output or error).strip():
                 logs.append((output or error)[-4000:])
             if code != 0:
@@ -743,7 +773,7 @@ class SSHExecutor:
             started_new = True
             if progress_callback:
                 progress_callback("开始执行 docker compose up -d，正在更新多服务")
-            code, output, error = self._run(client, f"{compose} up -d --remove-orphans", timeout=settings.build_timeout_seconds, on_output=progress_callback)
+            code, output, error = self._run(client, f"{compose} up -d --remove-orphans", timeout=self.build_timeout_seconds, on_output=progress_callback)
             if (output or error).strip():
                 logs.append((output or error)[-4000:])
             if code != 0:
@@ -779,12 +809,12 @@ class SSHExecutor:
                 logs=tuple(logs),
             )
         except Exception as exc:  # noqa: BLE001
-            if client and compose and started_new:
+            if client and compose and started_new and self.auto_rollback:
                 self._run(client, f"{compose} down --remove-orphans", timeout=60)
                 if previous_dir:
                     previous_compose = f"{compose.split(' -f ', 1)[0]} -f {shlex.quote(posixpath.join(previous_dir, compose_file))}"
                     rollback_code, rollback_output, rollback_error = self._run(
-                        client, f"{previous_compose} up -d --remove-orphans", timeout=settings.build_timeout_seconds
+                        client, f"{previous_compose} up -d --remove-orphans", timeout=self.build_timeout_seconds
                     )
                     if rollback_code == 0:
                         logs.append("已回滚到上一版 Compose 服务")

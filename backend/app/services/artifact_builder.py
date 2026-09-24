@@ -18,6 +18,8 @@ class ArtifactBuilder:
         log,
         git_username: str = "",
         git_token: str = "",
+        build_timeout_seconds: int | None = None,
+        max_build_log_lines: int | None = None,
     ) -> None:
         self.workspace = workspace
         self.source_dir = workspace / "source"
@@ -25,6 +27,8 @@ class ArtifactBuilder:
         self.log = log
         self.git_username = git_username
         self.git_token = git_token
+        self.build_timeout_seconds = build_timeout_seconds or settings.build_timeout_seconds
+        self.max_build_log_lines = max_build_log_lines or settings.max_build_log_lines
 
     def checkout(self, repository_url: str, branch: str) -> None:
         parsed = urlparse(repository_url)
@@ -69,7 +73,7 @@ class ArtifactBuilder:
             env=env,
             capture_output=True,
             text=True,
-            timeout=settings.build_timeout_seconds,
+            timeout=self.build_timeout_seconds,
             check=False,
         )
         if result.returncode != 0 and "dumb http transport" in result.stderr.lower():
@@ -90,7 +94,7 @@ class ArtifactBuilder:
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=settings.build_timeout_seconds,
+                timeout=self.build_timeout_seconds,
                 check=False,
             )
         if result.returncode != 0:
@@ -117,19 +121,19 @@ class ArtifactBuilder:
             bufsize=1,
         )
         try:
-            output, _ = process.communicate(timeout=settings.build_timeout_seconds)
+            output, _ = process.communicate(timeout=self.build_timeout_seconds)
         except subprocess.TimeoutExpired as exc:
             process.kill()
             process.communicate()
             raise RuntimeError(
-                f"构建超时（{settings.build_timeout_seconds} 秒）"
+                f"构建超时（{self.build_timeout_seconds} 秒）"
             ) from exc
         lines = [line for line in output.splitlines() if line.strip()]
-        for line in lines[: settings.max_build_log_lines]:
+        for line in lines[: self.max_build_log_lines]:
             self.log(f"[build] {line}")
         return_code = process.returncode
-        if len(lines) > settings.max_build_log_lines:
-            self.log(f"构建日志过长，已省略 {len(lines) - settings.max_build_log_lines} 行")
+        if len(lines) > self.max_build_log_lines:
+            self.log(f"构建日志过长，已省略 {len(lines) - self.max_build_log_lines} 行")
         if return_code != 0:
             tail = "\n".join(lines[-20:])
             raise RuntimeError(f"构建命令退出码 {return_code}：{tail}")

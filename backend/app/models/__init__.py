@@ -2,6 +2,8 @@ from app.models.environment import DeploymentTarget, Environment, TargetAccess
 from app.models.project import Project, ProjectCredential
 from app.models.release import Release, ReleaseDeployment, ReleaseLog, ReleaseStep
 from app.models.user import User
+from app.models.audit import AuditLog
+from app.models.platform import PlatformSetting
 
 __all__ = [
     "DeploymentTarget",
@@ -14,4 +16,6 @@ __all__ = [
     "ReleaseStep",
     "TargetAccess",
     "User",
+    "AuditLog",
+    "PlatformSetting",
 ]

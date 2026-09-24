@@ -16,6 +16,7 @@ from app.schemas.project import (
 )
 from app.services.credentials import decrypt_secret, encrypt_secret
 from app.services.git_repository import list_remote_branches
+from app.services.audit import record_audit
 
 router = APIRouter(prefix="/projects", tags=["项目"])
 
@@ -58,7 +59,7 @@ def list_projects(
 def create_project(
     payload: ProjectCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ) -> ProjectRead:
     validate_project(payload)
     if db.scalar(select(Project).where(Project.name == payload.name)):
@@ -75,6 +76,15 @@ def create_project(
                 token_encrypted=encrypt_secret(payload.git_token),
             )
         )
+    record_audit(
+        db,
+        actor,
+        action="project.create",
+        resource_type="project",
+        resource_id=project.id,
+        summary=f"创建项目 {project.name}",
+        detail={"project_type": project.project_type, "deployment_mode": project.deployment_mode},
+    )
     db.commit()
     db.refresh(project)
     return project_read(project, db)
@@ -113,7 +123,7 @@ def update_project(
     project_id: int,
     payload: ProjectCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_operator),
+    actor: User = Depends(require_operator),
 ) -> ProjectRead:
     validate_project(payload)
     project = db.get(Project, project_id)
@@ -140,6 +150,15 @@ def update_project(
         credential.username = payload.git_username
         if payload.git_token:
             credential.token_encrypted = encrypt_secret(payload.git_token)
+    record_audit(
+        db,
+        actor,
+        action="project.update",
+        resource_type="project",
+        resource_id=project.id,
+        summary=f"更新项目 {project.name}",
+        detail={"project_type": project.project_type, "deployment_mode": project.deployment_mode},
+    )
     db.commit()
     db.refresh(project)
     return project_read(project, db)
@@ -161,7 +180,7 @@ def get_project(
 def delete_project(
     project_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_release_manager),
+    actor: User = Depends(require_release_manager),
 ) -> Response:
     project = db.get(Project, project_id)
     if not project:
@@ -174,6 +193,7 @@ def delete_project(
     if active_release_count:
         raise HTTPException(status_code=409, detail="项目存在正在执行的发布，不能删除")
 
+    project_name = project.name
     releases = list(db.scalars(select(Release).where(Release.project_id == project_id)))
     for release in releases:
         db.delete(release)
@@ -187,5 +207,14 @@ def delete_project(
     db.flush()
 
     db.delete(project)
+    record_audit(
+        db,
+        actor,
+        action="project.delete",
+        resource_type="project",
+        resource_id=project_id,
+        summary=f"删除项目 {project_name}",
+        detail={"release_count": len(releases), "target_count": len(targets)},
+    )
     db.commit()
     return Response(status_code=204)

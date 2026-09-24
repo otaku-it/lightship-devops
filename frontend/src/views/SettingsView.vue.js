@@ -1,5 +1,5 @@
 import { computed, onMounted, reactive, ref } from 'vue';
-import { KeyRound, LockKeyhole, Pencil, RefreshCw, ShieldCheck, UserPlus, Users } from 'lucide-vue-next';
+import { KeyRound, LockKeyhole, Pencil, RefreshCw, Save, ShieldCheck, UserPlus, Users } from 'lucide-vue-next';
 import { api } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import ModalShell from '../components/ModalShell.vue';
@@ -17,6 +17,7 @@ const resetUser = ref(null);
 const passwordForm = reactive({ current_password: '', new_password: '', confirm_password: '' });
 const userForm = reactive({ username: '', display_name: '', password: '', role: 'developer' });
 const resetForm = reactive({ new_password: '', confirm_password: '' });
+const platformForm = reactive({ executor_mode: 'real', build_timeout_seconds: 900, ssh_command_timeout_seconds: 120, health_check_retries: 10, auto_rollback: true, max_build_log_lines: 500 });
 const isAdmin = computed(() => auth.role === 'admin');
 const roleLabels = { admin: '平台管理员', release_manager: '发布管理员', developer: '开发人员', viewer: '只读用户' };
 function clearFeedback() { message.value = ''; error.value = ''; }
@@ -34,6 +35,28 @@ async function loadUsers() {
     }
     finally {
         loading.value = false;
+    }
+}
+async function loadPlatformSettings() {
+    try {
+        Object.assign(platformForm, (await api.get('/platform/settings')).data);
+    }
+    catch (exception) {
+        error.value = exception.response?.data?.detail || '发布设置加载失败';
+    }
+}
+async function savePlatformSettings() {
+    clearFeedback();
+    saving.value = true;
+    try {
+        Object.assign(platformForm, (await api.put('/platform/settings', platformForm)).data);
+        message.value = '发布设置已保存，将对之后创建的发布任务生效';
+    }
+    catch (exception) {
+        error.value = exception.response?.data?.detail || '发布设置保存失败';
+    }
+    finally {
+        saving.value = false;
     }
 }
 async function changePassword() {
@@ -133,7 +156,7 @@ async function resetPassword() {
         saving.value = false;
     }
 }
-onMounted(loadUsers);
+onMounted(() => { loadUsers(); loadPlatformSettings(); });
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -421,7 +444,7 @@ else if (__VLS_ctx.activeTab === 'users') {
 }
 else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-        ...{ class: "settings-grid" },
+        ...{ class: "settings-grid release-settings-grid" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.article, __VLS_intrinsicElements.article)({
         ...{ class: "settings-panel" },
@@ -437,6 +460,92 @@ else {
     // @ts-ignore
     const __VLS_41 = __VLS_asFunctionalComponent(__VLS_40, new __VLS_40({}));
     const __VLS_42 = __VLS_41({}, ...__VLS_functionalComponentArgsRest(__VLS_41));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.form, __VLS_intrinsicElements.form)({
+        ...{ onSubmit: (__VLS_ctx.savePlatformSettings) },
+        ...{ class: "settings-form release-settings-form" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        value: (__VLS_ctx.platformForm.executor_mode === 'real' ? '真实执行（real）' : '模拟执行（mock）'),
+        disabled: true,
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "settings-form-columns" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        type: "number",
+        min: "60",
+        max: "86400",
+        disabled: (!__VLS_ctx.isAdmin),
+    });
+    (__VLS_ctx.platformForm.build_timeout_seconds);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        type: "number",
+        min: "10",
+        max: "7200",
+        disabled: (!__VLS_ctx.isAdmin),
+    });
+    (__VLS_ctx.platformForm.ssh_command_timeout_seconds);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        type: "number",
+        min: "1",
+        max: "20",
+        disabled: (!__VLS_ctx.isAdmin),
+    });
+    (__VLS_ctx.platformForm.health_check_retries);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        type: "number",
+        min: "100",
+        max: "10000",
+        disabled: (!__VLS_ctx.isAdmin),
+    });
+    (__VLS_ctx.platformForm.max_build_log_lines);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
+        ...{ class: "settings-switch-row" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        type: "checkbox",
+        disabled: (!__VLS_ctx.isAdmin),
+    });
+    (__VLS_ctx.platformForm.auto_rollback);
+    if (__VLS_ctx.isAdmin) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ class: "primary-button" },
+            disabled: (__VLS_ctx.saving),
+        });
+        const __VLS_44 = {}.Save;
+        /** @type {[typeof __VLS_components.Save, ]} */ ;
+        // @ts-ignore
+        const __VLS_45 = __VLS_asFunctionalComponent(__VLS_44, new __VLS_44({}));
+        const __VLS_46 = __VLS_45({}, ...__VLS_functionalComponentArgsRest(__VLS_45));
+        (__VLS_ctx.saving ? '保存中...' : '保存发布设置');
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
+            ...{ class: "settings-readonly-note" },
+        });
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.article, __VLS_intrinsicElements.article)({
+        ...{ class: "settings-panel" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "settings-panel-head" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "settings-info-list" },
     });
@@ -449,52 +558,43 @@ else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.article, __VLS_intrinsicElements.article)({
-        ...{ class: "settings-panel" },
-    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "settings-panel-head" },
+        ...{ class: "settings-effective-note" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    const __VLS_48 = {}.ShieldCheck;
+    /** @type {[typeof __VLS_components.ShieldCheck, ]} */ ;
+    // @ts-ignore
+    const __VLS_49 = __VLS_asFunctionalComponent(__VLS_48, new __VLS_48({}));
+    const __VLS_50 = __VLS_49({}, ...__VLS_functionalComponentArgsRest(__VLS_49));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "settings-env-list" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.code, __VLS_intrinsicElements.code)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
-        ...{ class: "settings-hint" },
-    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
 }
 if (__VLS_ctx.showUserModal) {
     /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
     // @ts-ignore
-    const __VLS_44 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+    const __VLS_52 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
         ...{ 'onClose': {} },
         title: (__VLS_ctx.editingUser ? '编辑用户' : '新建用户'),
         subtitle: "用户可以登录平台，具体发布权限由角色决定",
         size: "small",
     }));
-    const __VLS_45 = __VLS_44({
+    const __VLS_53 = __VLS_52({
         ...{ 'onClose': {} },
         title: (__VLS_ctx.editingUser ? '编辑用户' : '新建用户'),
         subtitle: "用户可以登录平台，具体发布权限由角色决定",
         size: "small",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_44));
-    let __VLS_47;
-    let __VLS_48;
-    let __VLS_49;
-    const __VLS_50 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_52));
+    let __VLS_55;
+    let __VLS_56;
+    let __VLS_57;
+    const __VLS_58 = {
         onClose: (...[$event]) => {
             if (!(__VLS_ctx.showUserModal))
                 return;
             __VLS_ctx.showUserModal = false;
         }
     };
-    __VLS_46.slots.default;
+    __VLS_54.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "modal-body settings-modal-body" },
     });
@@ -572,34 +672,34 @@ if (__VLS_ctx.showUserModal) {
         disabled: (__VLS_ctx.saving),
     });
     (__VLS_ctx.saving ? '保存中...' : '保存用户');
-    var __VLS_46;
+    var __VLS_54;
 }
 if (__VLS_ctx.showResetModal) {
     /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
     // @ts-ignore
-    const __VLS_51 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+    const __VLS_59 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
         ...{ 'onClose': {} },
         title: "重置用户密码",
         subtitle: (`为 ${__VLS_ctx.resetUser?.display_name} 设置新密码`),
         size: "small",
     }));
-    const __VLS_52 = __VLS_51({
+    const __VLS_60 = __VLS_59({
         ...{ 'onClose': {} },
         title: "重置用户密码",
         subtitle: (`为 ${__VLS_ctx.resetUser?.display_name} 设置新密码`),
         size: "small",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_51));
-    let __VLS_54;
-    let __VLS_55;
-    let __VLS_56;
-    const __VLS_57 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_59));
+    let __VLS_62;
+    let __VLS_63;
+    let __VLS_64;
+    const __VLS_65 = {
         onClose: (...[$event]) => {
             if (!(__VLS_ctx.showResetModal))
                 return;
             __VLS_ctx.showResetModal = false;
         }
     };
-    __VLS_53.slots.default;
+    __VLS_61.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "modal-body settings-modal-body" },
     });
@@ -645,7 +745,7 @@ if (__VLS_ctx.showResetModal) {
         ...{ class: "primary-button" },
         disabled: (__VLS_ctx.saving),
     });
-    var __VLS_53;
+    var __VLS_61;
 }
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
@@ -687,13 +787,19 @@ if (__VLS_ctx.showResetModal) {
 /** @type {__VLS_StyleScopedClasses['icon-text-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['list-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['settings-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['release-settings-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['settings-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['settings-panel-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['settings-form']} */ ;
+/** @type {__VLS_StyleScopedClasses['release-settings-form']} */ ;
+/** @type {__VLS_StyleScopedClasses['settings-form-columns']} */ ;
+/** @type {__VLS_StyleScopedClasses['settings-switch-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['settings-readonly-note']} */ ;
 /** @type {__VLS_StyleScopedClasses['settings-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['settings-panel-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['settings-info-list']} */ ;
-/** @type {__VLS_StyleScopedClasses['settings-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['settings-panel-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['settings-env-list']} */ ;
-/** @type {__VLS_StyleScopedClasses['settings-hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['settings-effective-note']} */ ;
 /** @type {__VLS_StyleScopedClasses['modal-body']} */ ;
 /** @type {__VLS_StyleScopedClasses['settings-modal-body']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-grid']} */ ;
@@ -728,6 +834,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             LockKeyhole: LockKeyhole,
             Pencil: Pencil,
             RefreshCw: RefreshCw,
+            Save: Save,
             ShieldCheck: ShieldCheck,
             UserPlus: UserPlus,
             Users: Users,
@@ -746,10 +853,12 @@ const __VLS_self = (await import('vue')).defineComponent({
             passwordForm: passwordForm,
             userForm: userForm,
             resetForm: resetForm,
+            platformForm: platformForm,
             isAdmin: isAdmin,
             roleLabel: roleLabel,
             formatDate: formatDate,
             loadUsers: loadUsers,
+            savePlatformSettings: savePlatformSettings,
             changePassword: changePassword,
             openCreateUser: openCreateUser,
             openEditUser: openEditUser,

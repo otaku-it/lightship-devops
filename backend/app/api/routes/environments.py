@@ -22,6 +22,8 @@ from app.schemas.environment import (
 from app.services.executors.factory import get_executor
 from app.services.credentials import decrypt_secret, encrypt_secret
 from app.core.config import settings
+from app.services.audit import record_audit
+from app.services.platform_settings import load_platform_settings
 
 router = APIRouter(tags=["环境"])
 
@@ -77,10 +79,20 @@ def list_environments(
 def create_environment(
     payload: EnvironmentCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_release_manager),
+    actor: User = Depends(require_release_manager),
 ) -> EnvironmentRead:
     environment = Environment(**payload.model_dump())
     db.add(environment)
+    db.flush()
+    record_audit(
+        db,
+        actor,
+        action="environment.create",
+        resource_type="environment",
+        resource_id=environment.id,
+        summary=f"创建环境 {environment.name}",
+        detail={"slug": environment.slug, "approval_required": environment.approval_required},
+    )
     db.commit()
     db.refresh(environment)
     return EnvironmentRead(**payload.model_dump(), id=environment.id, target_count=0)
@@ -98,7 +110,7 @@ def list_targets(
 def create_target(
     payload: TargetCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_release_manager),
+    actor: User = Depends(require_release_manager),
 ) -> TargetRead:
     if not db.get(Project, payload.project_id):
         raise HTTPException(status_code=404, detail="项目不存在")
@@ -119,6 +131,15 @@ def create_target(
     db.add(target)
     db.flush()
     save_access(target, payload, db)
+    record_audit(
+        db,
+        actor,
+        action="target.create",
+        resource_type="target",
+        resource_id=target.id,
+        summary=f"创建目标服务器 {target.name}",
+        detail={"address": target.address, "port": target.port, "project_id": target.project_id, "environment_id": target.environment_id},
+    )
     db.commit()
     db.refresh(target)
     return target_read(target)
@@ -129,7 +150,7 @@ def update_target(
     target_id: int,
     payload: TargetCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_release_manager),
+    actor: User = Depends(require_release_manager),
 ) -> TargetRead:
     target = db.get(DeploymentTarget, target_id)
     if not target:
@@ -158,6 +179,15 @@ def update_target(
         setattr(target, key, value)
     target.status = "unknown"
     save_access(target, payload, db)
+    record_audit(
+        db,
+        actor,
+        action="target.update",
+        resource_type="target",
+        resource_id=target.id,
+        summary=f"更新目标服务器 {target.name}",
+        detail={"address": target.address, "port": target.port, "project_id": target.project_id, "environment_id": target.environment_id},
+    )
     db.commit()
     db.refresh(target)
     return target_read(target)
@@ -167,7 +197,7 @@ def update_target(
 def delete_target(
     target_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_release_manager),
+    actor: User = Depends(require_release_manager),
 ) -> Response:
     target = db.get(DeploymentTarget, target_id)
     if not target:
@@ -182,7 +212,16 @@ def delete_target(
             status_code=409,
             detail=f"该服务器仍被 {release_count} 条发布结果引用，请先删除相关发布记录",
         )
+    target_name = target.name
     db.delete(target)
+    record_audit(
+        db,
+        actor,
+        action="target.delete",
+        resource_type="target",
+        resource_id=target_id,
+        summary=f"删除目标服务器 {target_name}",
+    )
     db.commit()
     return Response(status_code=204)
 
@@ -192,7 +231,7 @@ def test_target(
     target_id: int,
     payload: ConnectionTestRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_release_manager),
+    actor: User = Depends(require_release_manager),
 ) -> ConnectionTestResult:
     target = db.get(DeploymentTarget, target_id)
     if not target:
@@ -211,7 +250,7 @@ def test_target(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
-        executor = get_executor(target.connection_type)
+        executor = get_executor(target.connection_type, load_platform_settings(db))
         result = executor.test_connection(
             target,
             private_key=private_key,
@@ -256,7 +295,7 @@ def check_service_status(
     ).first()
     release, deployment = latest if latest else (None, None)
     try:
-        executor = get_executor(target.connection_type)
+        executor = get_executor(target.connection_type, load_platform_settings(db))
         result = executor.check_service_status(
             target,
             project_name=target.project.name,
@@ -298,7 +337,7 @@ def control_service(
     if settings.executor_mode != "mock" and (not access or not (access.password_encrypted or access.private_key_encrypted)):
         raise HTTPException(status_code=422, detail="目标服务器尚未配置 SSH 凭证")
     try:
-        executor = get_executor(target.connection_type)
+        executor = get_executor(target.connection_type, load_platform_settings(db))
         result = executor.control_service(
             target,
             action=payload.action,
@@ -317,4 +356,15 @@ def control_service(
         )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_audit(
+        db,
+        actor,
+        action=f"service.{payload.action}",
+        resource_type="target",
+        resource_id=target.id,
+        summary=f"{ {'stop':'暂停','start':'启用','restart':'重启'}[payload.action] }服务 {target.name}",
+        detail={"message": result.message, "detail": result.detail},
+        result="success" if result.success else "failed",
+    )
+    db.commit()
     return ServiceControlRead(target_id=target.id, action=payload.action, **result.__dict__)

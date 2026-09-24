@@ -7,6 +7,7 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.api.dependencies import get_current_user, require_admin
 from app.models.user import User
 from app.schemas.auth import LoginRequest, PasswordChange, PasswordReset, TokenResponse, UserCreate, UserRead, UserUpdate
+from app.services.audit import record_audit
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -16,6 +17,15 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
     user = db.scalar(select(User).where(User.username == payload.username))
     if not user or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
+    record_audit(
+        db,
+        user,
+        action="auth.login",
+        resource_type="session",
+        resource_id=user.id,
+        summary="登录平台",
+    )
+    db.commit()
     return TokenResponse(
         access_token=create_access_token(user.username),
         display_name=user.display_name,
@@ -35,6 +45,14 @@ def change_password(payload: PasswordChange, db: Session = Depends(get_db), user
     if payload.current_password == payload.new_password:
         raise HTTPException(status_code=400, detail="新密码不能与当前密码相同")
     user.password_hash = hash_password(payload.new_password)
+    record_audit(
+        db,
+        user,
+        action="auth.password.change",
+        resource_type="user",
+        resource_id=user.id,
+        summary="修改自己的登录密码",
+    )
     db.commit()
     return {"message": "密码修改成功，请使用新密码重新登录"}
 
@@ -45,11 +63,21 @@ def list_users(db: Session = Depends(get_db), _: User = Depends(require_admin)) 
 
 
 @router.post("/users", response_model=UserRead, status_code=201)
-def create_user(payload: UserCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)) -> UserRead:
+def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User = Depends(require_admin)) -> UserRead:
     if db.scalar(select(User).where(User.username == payload.username)):
         raise HTTPException(status_code=409, detail="用户名已存在")
     user = User(username=payload.username, display_name=payload.display_name.strip(), password_hash=hash_password(payload.password), role=payload.role, is_active=True)
     db.add(user)
+    db.flush()
+    record_audit(
+        db,
+        actor,
+        action="user.create",
+        resource_type="user",
+        resource_id=user.id,
+        summary=f"创建用户 {user.username}",
+        detail={"display_name": user.display_name, "role": user.role},
+    )
     db.commit()
     db.refresh(user)
     return UserRead.model_validate(user, from_attributes=True)
@@ -69,16 +97,37 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
     user.display_name = payload.display_name.strip()
     user.role = payload.role
     user.is_active = payload.is_active
+    record_audit(
+        db,
+        actor,
+        action="user.update",
+        resource_type="user",
+        resource_id=user.id,
+        summary=f"更新用户 {user.username}",
+        detail={
+            "display_name": user.display_name,
+            "role": user.role,
+            "is_active": user.is_active,
+        },
+    )
     db.commit()
     db.refresh(user)
     return UserRead.model_validate(user, from_attributes=True)
 
 
 @router.post("/users/{user_id}/reset-password")
-def reset_password(user_id: int, payload: PasswordReset, db: Session = Depends(get_db), _: User = Depends(require_admin)) -> dict[str, str]:
+def reset_password(user_id: int, payload: PasswordReset, db: Session = Depends(get_db), actor: User = Depends(require_admin)) -> dict[str, str]:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     user.password_hash = hash_password(payload.new_password)
+    record_audit(
+        db,
+        actor,
+        action="user.password.reset",
+        resource_type="user",
+        resource_id=user.id,
+        summary=f"重置用户 {user.username} 的密码",
+    )
     db.commit()
     return {"message": f"用户 {user.username} 的密码已重置"}

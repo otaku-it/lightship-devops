@@ -19,6 +19,7 @@ const nav = [
     { to: '/services', name: 'services', label: '服务状态', icon: Activity },
 ];
 const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role));
+const canViewAudit = computed(() => ['admin', 'release_manager'].includes(auth.role));
 const titles = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境', services: '服务状态', settings: '平台设置', artifacts: '制品库', audit: '审计日志' };
 const title = computed(() => titles[String(route.name)] || '轻舟');
 const searchResults = computed(() => {
@@ -157,19 +158,23 @@ const __VLS_16 = {}.Box;
 const __VLS_17 = __VLS_asFunctionalComponent(__VLS_16, new __VLS_16({}));
 const __VLS_18 = __VLS_17({}, ...__VLS_functionalComponentArgsRest(__VLS_17));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-    ...{ onClick: (...[$event]) => {
-            __VLS_ctx.router.push('/audit');
-        } },
-    ...{ class: "nav-item" },
-    ...{ class: ({ active: __VLS_ctx.route.name === 'audit' }) },
-});
-const __VLS_20 = {}.Layers3;
-/** @type {[typeof __VLS_components.Layers3, ]} */ ;
-// @ts-ignore
-const __VLS_21 = __VLS_asFunctionalComponent(__VLS_20, new __VLS_20({}));
-const __VLS_22 = __VLS_21({}, ...__VLS_functionalComponentArgsRest(__VLS_21));
-__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+if (__VLS_ctx.canViewAudit) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.canViewAudit))
+                    return;
+                __VLS_ctx.router.push('/audit');
+            } },
+        ...{ class: "nav-item" },
+        ...{ class: ({ active: __VLS_ctx.route.name === 'audit' }) },
+    });
+    const __VLS_20 = {}.Layers3;
+    /** @type {[typeof __VLS_components.Layers3, ]} */ ;
+    // @ts-ignore
+    const __VLS_21 = __VLS_asFunctionalComponent(__VLS_20, new __VLS_20({}));
+    const __VLS_22 = __VLS_21({}, ...__VLS_functionalComponentArgsRest(__VLS_21));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "nav-label" },
 });
@@ -393,6 +398,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             searchLoading: searchLoading,
             nav: nav,
             canOperate: canOperate,
+            canViewAudit: canViewAudit,
             title: title,
             searchResults: searchResults,
             loadSearchData: loadSearchData,

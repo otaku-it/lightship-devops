@@ -26,6 +26,7 @@ const nav = [
   { to: '/services', name: 'services', label: '服务状态', icon: Activity },
 ]
 const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role))
+const canViewAudit = computed(() => ['admin', 'release_manager'].includes(auth.role))
 const titles: Record<string, string> = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境', services: '服务状态', settings: '平台设置', artifacts: '制品库', audit: '审计日志' }
 const title = computed(() => titles[String(route.name)] || '轻舟')
 const searchResults = computed(() => {
@@ -88,7 +89,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleSearchShortcut
           <component :is="item.icon" /><span>{{ item.label }}</span>
         </router-link>
         <button class="nav-item" :class="{active: route.name === 'artifacts'}" @click="router.push('/artifacts')"><Box /><span>制品库</span></button>
-        <button class="nav-item" :class="{active: route.name === 'audit'}" @click="router.push('/audit')"><Layers3 /><span>审计日志</span></button>
+        <button v-if="canViewAudit" class="nav-item" :class="{active: route.name === 'audit'}" @click="router.push('/audit')"><Layers3 /><span>审计日志</span></button>
       </nav>
       <div class="nav-label">系统</div>
       <nav class="nav-list"><button class="nav-item" :class="{active: route.name === 'settings'}" @click="router.push('/settings')"><Settings /><span>平台设置</span></button></nav>
