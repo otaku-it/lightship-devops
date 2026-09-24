@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, require_operator, require_release_manager
 from app.core.database import get_db
 from app.models.environment import DeploymentTarget
+from app.models.code_host import CodeHostConnection
 from app.models.project import Project, ProjectCredential
 from app.models.release import Release
 from app.models.user import User
@@ -15,6 +16,7 @@ from app.schemas.project import (
     RepositoryBranchesRequest,
 )
 from app.services.credentials import decrypt_secret, encrypt_secret
+from app.services.code_hosts import can_view_connection
 from app.services.git_repository import list_remote_branches
 from app.services.audit import record_audit
 
@@ -43,8 +45,13 @@ def project_read(project: Project, db: Session) -> ProjectRead:
         **{column.name: getattr(project, column.name) for column in Project.__table__.columns if column.name != "updated_at"},
         release_count=total,
         success_rate=round(succeeded / total * 100, 1) if total else 0,
-        credential_configured=bool(project.credential and project.credential.token_encrypted),
+        credential_configured=bool(
+            (project.code_host_connection and project.code_host_connection.token_encrypted)
+            or (project.credential and project.credential.token_encrypted)
+        ),
         git_username=project.credential.username if project.credential else "",
+        code_host_name=project.code_host_connection.name if project.code_host_connection else "",
+        code_host_provider=project.code_host_connection.provider if project.code_host_connection else "",
     )
 
 
@@ -64,6 +71,12 @@ def create_project(
     validate_project(payload)
     if db.scalar(select(Project).where(Project.name == payload.name)):
         raise HTTPException(status_code=409, detail="项目名称已存在")
+    if payload.code_host_connection_id and not db.get(CodeHostConnection, payload.code_host_connection_id):
+        raise HTTPException(status_code=404, detail="代码托管连接不存在")
+    if payload.code_host_connection_id:
+        connection = db.get(CodeHostConnection, payload.code_host_connection_id)
+        if connection and not can_view_connection(connection, actor):
+            raise HTTPException(status_code=403, detail="当前账号没有使用此代码托管连接的权限")
     data = payload.model_dump(exclude={"git_username", "git_token"})
     project = Project(**data)
     db.add(project)
@@ -94,7 +107,7 @@ def create_project(
 def get_repository_branches(
     payload: RepositoryBranchesRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> RepositoryBranchesRead:
     project = db.get(Project, payload.project_id) if payload.project_id else None
     if payload.project_id and not project:
@@ -103,11 +116,12 @@ def get_repository_branches(
     if not repository_url:
         raise HTTPException(status_code=422, detail="请先填写 Git 仓库地址")
     credential = project.credential if project else None
-    username = payload.git_username or (credential.username if credential else "")
+    connection = db.get(CodeHostConnection, payload.code_host_connection_id) if payload.code_host_connection_id else (project.code_host_connection if project else None)
+    if connection and not can_view_connection(connection, user):
+        raise HTTPException(status_code=403, detail="当前账号没有使用此代码托管连接的权限")
+    username = payload.git_username or (connection.username if connection else "") or (credential.username if credential else "")
     try:
-        token = payload.git_token or decrypt_secret(
-            credential.token_encrypted if credential else ""
-        )
+        token = payload.git_token or decrypt_secret(connection.token_encrypted if connection else credential.token_encrypted if credential else "")
         branches, default_branch = list_remote_branches(
             repository_url,
             username=username,
@@ -134,6 +148,12 @@ def update_project(
     )
     if duplicate:
         raise HTTPException(status_code=409, detail="项目名称已存在")
+    if payload.code_host_connection_id and not db.get(CodeHostConnection, payload.code_host_connection_id):
+        raise HTTPException(status_code=404, detail="代码托管连接不存在")
+    if payload.code_host_connection_id:
+        connection = db.get(CodeHostConnection, payload.code_host_connection_id)
+        if connection and not can_view_connection(connection, actor):
+            raise HTTPException(status_code=403, detail="当前账号没有使用此代码托管连接的权限")
     deployment_mode_changed = project.deployment_mode != payload.deployment_mode
     for key, value in payload.model_dump(exclude={"git_username", "git_token"}).items():
         setattr(project, key, value)

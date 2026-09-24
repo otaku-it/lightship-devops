@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Bell, Box, ChevronRight, Folder, Gauge, History, Layers3, Plus, Search, Server, Settings, ShipWheel, Activity, } from 'lucide-vue-next';
+import { Bell, Box, ChevronRight, Folder, Gauge, GitFork, History, Layers3, Plus, Search, Server, Settings, ShipWheel, Activity, } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { api } from '../api/client';
 const route = useRoute();
@@ -11,6 +11,7 @@ const searchInput = ref(null);
 const searchProjects = ref([]);
 const searchReleases = ref([]);
 const searchLoading = ref(false);
+const codeHostVisible = ref(false);
 const nav = [
     { to: '/', name: 'dashboard', label: '总览', icon: Gauge },
     { to: '/projects', name: 'projects', label: '项目', icon: Folder },
@@ -20,7 +21,8 @@ const nav = [
 ];
 const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role));
 const canViewAudit = computed(() => ['admin', 'release_manager'].includes(auth.role));
-const titles = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境', services: '服务状态', settings: '平台设置', artifacts: '制品库', audit: '审计日志' };
+const canViewCodeHosts = computed(() => auth.role === 'admin' || codeHostVisible.value);
+const titles = { dashboard: '发布总览', projects: '项目管理', 'code-hosts': '代码托管', releases: '发布记录', environments: '发布环境', services: '服务状态', settings: '平台设置', artifacts: '制品库', audit: '审计日志' };
 const title = computed(() => titles[String(route.name)] || '轻舟');
 const searchResults = computed(() => {
     const keyword = search.value.trim().toLowerCase();
@@ -51,6 +53,14 @@ async function loadSearchData() {
         searchLoading.value = false;
     }
 }
+async function loadCodeHostVisibility() {
+    try {
+        codeHostVisible.value = (await api.get('/code-hosts')).data.length > 0;
+    }
+    catch {
+        codeHostVisible.value = false;
+    }
+}
 function selectSearchResult(to) {
     search.value = '';
     router.push(to);
@@ -71,6 +81,7 @@ function handleSearchShortcut(event) {
 onMounted(() => {
     auth.syncMe().catch(() => undefined);
     loadSearchData();
+    loadCodeHostVisibility();
     window.addEventListener('keydown', handleSearchShortcut);
 });
 onBeforeUnmount(() => window.removeEventListener('keydown', handleSearchShortcut));
@@ -181,6 +192,23 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 __VLS_asFunctionalElement(__VLS_intrinsicElements.nav, __VLS_intrinsicElements.nav)({
     ...{ class: "nav-list" },
 });
+if (__VLS_ctx.canViewCodeHosts) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.canViewCodeHosts))
+                    return;
+                __VLS_ctx.router.push('/code-hosts');
+            } },
+        ...{ class: "nav-item" },
+        ...{ class: ({ active: __VLS_ctx.route.name === 'code-hosts' }) },
+    });
+    const __VLS_24 = {}.GitFork;
+    /** @type {[typeof __VLS_components.GitFork, ]} */ ;
+    // @ts-ignore
+    const __VLS_25 = __VLS_asFunctionalComponent(__VLS_24, new __VLS_24({}));
+    const __VLS_26 = __VLS_25({}, ...__VLS_functionalComponentArgsRest(__VLS_25));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ onClick: (...[$event]) => {
             __VLS_ctx.router.push('/settings');
@@ -188,11 +216,11 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElement
     ...{ class: "nav-item" },
     ...{ class: ({ active: __VLS_ctx.route.name === 'settings' }) },
 });
-const __VLS_24 = {}.Settings;
+const __VLS_28 = {}.Settings;
 /** @type {[typeof __VLS_components.Settings, ]} */ ;
 // @ts-ignore
-const __VLS_25 = __VLS_asFunctionalComponent(__VLS_24, new __VLS_24({}));
-const __VLS_26 = __VLS_25({}, ...__VLS_functionalComponentArgsRest(__VLS_25));
+const __VLS_29 = __VLS_asFunctionalComponent(__VLS_28, new __VLS_28({}));
+const __VLS_30 = __VLS_29({}, ...__VLS_functionalComponentArgsRest(__VLS_29));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "sidebar-foot" },
@@ -248,11 +276,11 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "search-box" },
 });
-const __VLS_28 = {}.Search;
+const __VLS_32 = {}.Search;
 /** @type {[typeof __VLS_components.Search, ]} */ ;
 // @ts-ignore
-const __VLS_29 = __VLS_asFunctionalComponent(__VLS_28, new __VLS_28({}));
-const __VLS_30 = __VLS_29({}, ...__VLS_functionalComponentArgsRest(__VLS_29));
+const __VLS_33 = __VLS_asFunctionalComponent(__VLS_32, new __VLS_32({}));
+const __VLS_34 = __VLS_33({}, ...__VLS_functionalComponentArgsRest(__VLS_33));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
     ...{ onFocus: (__VLS_ctx.loadSearchData) },
     ref: "searchInput",
@@ -311,11 +339,11 @@ if (__VLS_ctx.search.trim()) {
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ class: "icon-button" },
 });
-const __VLS_32 = {}.Bell;
+const __VLS_36 = {}.Bell;
 /** @type {[typeof __VLS_components.Bell, ]} */ ;
 // @ts-ignore
-const __VLS_33 = __VLS_asFunctionalComponent(__VLS_32, new __VLS_32({}));
-const __VLS_34 = __VLS_33({}, ...__VLS_functionalComponentArgsRest(__VLS_33));
+const __VLS_37 = __VLS_asFunctionalComponent(__VLS_36, new __VLS_36({}));
+const __VLS_38 = __VLS_37({}, ...__VLS_functionalComponentArgsRest(__VLS_37));
 if (__VLS_ctx.canOperate) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
@@ -325,17 +353,17 @@ if (__VLS_ctx.canOperate) {
             } },
         ...{ class: "primary-button" },
     });
-    const __VLS_36 = {}.Plus;
+    const __VLS_40 = {}.Plus;
     /** @type {[typeof __VLS_components.Plus, ]} */ ;
     // @ts-ignore
-    const __VLS_37 = __VLS_asFunctionalComponent(__VLS_36, new __VLS_36({}));
-    const __VLS_38 = __VLS_37({}, ...__VLS_functionalComponentArgsRest(__VLS_37));
+    const __VLS_41 = __VLS_asFunctionalComponent(__VLS_40, new __VLS_40({}));
+    const __VLS_42 = __VLS_41({}, ...__VLS_functionalComponentArgsRest(__VLS_41));
 }
-const __VLS_40 = {}.RouterView;
+const __VLS_44 = {}.RouterView;
 /** @type {[typeof __VLS_components.RouterView, typeof __VLS_components.routerView, ]} */ ;
 // @ts-ignore
-const __VLS_41 = __VLS_asFunctionalComponent(__VLS_40, new __VLS_40({}));
-const __VLS_42 = __VLS_41({}, ...__VLS_functionalComponentArgsRest(__VLS_41));
+const __VLS_45 = __VLS_asFunctionalComponent(__VLS_44, new __VLS_44({}));
+const __VLS_46 = __VLS_45({}, ...__VLS_functionalComponentArgsRest(__VLS_45));
 /** @type {__VLS_StyleScopedClasses['app-shell']} */ ;
 /** @type {__VLS_StyleScopedClasses['sidebar']} */ ;
 /** @type {__VLS_StyleScopedClasses['brand']} */ ;
@@ -353,6 +381,8 @@ const __VLS_42 = __VLS_41({}, ...__VLS_functionalComponentArgsRest(__VLS_41));
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['sidebar-foot']} */ ;
@@ -385,6 +415,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             Bell: Bell,
             Box: Box,
             ChevronRight: ChevronRight,
+            GitFork: GitFork,
             Layers3: Layers3,
             Plus: Plus,
             Search: Search,
@@ -399,6 +430,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             nav: nav,
             canOperate: canOperate,
             canViewAudit: canViewAudit,
+            canViewCodeHosts: canViewCodeHosts,
             title: title,
             searchResults: searchResults,
             loadSearchData: loadSearchData,

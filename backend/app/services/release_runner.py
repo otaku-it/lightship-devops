@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.environment import DeploymentTarget
+from app.models.code_host import CodeHostConnection
 from app.models.project import Project
 from app.models.release import Release, ReleaseDeployment, ReleaseLog, ReleaseStep
 from app.services.artifact_builder import ArtifactBuilder
@@ -55,8 +56,9 @@ def run_mock_release(db, release: Release, steps: list[ReleaseStep]) -> None:
 def run_real_release(db, release: Release, steps: list[ReleaseStep]) -> None:
     project = release.project
     credential = project.credential
-    git_token = decrypt_secret(credential.token_encrypted if credential else "")
-    git_username = credential.username if credential else ""
+    connection = project.code_host_connection
+    git_token = decrypt_secret(connection.token_encrypted if connection else credential.token_encrypted if credential else "")
+    git_username = (connection.username if connection else "") or (credential.username if credential else "")
     runtime_settings = load_platform_settings(db)
 
     with tempfile.TemporaryDirectory(prefix=f"lightship-{release.release_no}-") as temp_dir:
@@ -217,6 +219,7 @@ def run_release(release_id: int) -> None:
             select(Release)
             .options(
                 selectinload(Release.project).selectinload(Project.credential),
+                selectinload(Release.project).selectinload(Project.code_host_connection),
                 selectinload(Release.environment),
             )
             .where(Release.id == release_id)

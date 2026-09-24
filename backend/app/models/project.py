@@ -24,12 +24,16 @@ class Project(TimestampMixin, Base):
     docker_run_args: Mapped[str] = mapped_column(String(1000), default="")
     compose_file_path: Mapped[str] = mapped_column(String(255), default="docker-compose.yml")
     compose_project_name: Mapped[str] = mapped_column(String(100), default="")
+    code_host_connection_id: Mapped[int | None] = mapped_column(
+        ForeignKey("code_host_connections.id"), nullable=True, index=True
+    )
 
     releases = relationship("Release", back_populates="project")
     targets = relationship("DeploymentTarget", back_populates="project")
     credential = relationship(
         "ProjectCredential", back_populates="project", uselist=False, cascade="all, delete-orphan"
     )
+    code_host_connection = relationship("CodeHostConnection", back_populates="projects")
 
 
 class ProjectCredential(Base):

@@ -9,6 +9,7 @@ import ServicesView from '../views/ServicesView.vue';
 import SettingsView from '../views/SettingsView.vue';
 import ComingSoonView from '../views/ComingSoonView.vue';
 import AuditView from '../views/AuditView.vue';
+import CodeHostsView from '../views/CodeHostsView.vue';
 const router = createRouter({
     history: createWebHistory(),
     routes: [
@@ -19,6 +20,7 @@ const router = createRouter({
             children: [
                 { path: '', name: 'dashboard', component: DashboardView },
                 { path: 'projects', name: 'projects', component: ProjectsView },
+                { path: 'code-hosts', name: 'code-hosts', component: CodeHostsView },
                 { path: 'releases', name: 'releases', component: ReleasesView },
                 { path: 'environments', name: 'environments', component: EnvironmentsView },
                 { path: 'services', name: 'services', component: ServicesView },

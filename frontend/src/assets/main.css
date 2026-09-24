@@ -273,6 +273,65 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .project-source-section + .modal-body { padding-top: 18px; }
 .project-source-section + .modal-body::before { content: "02  配置构建与部署"; display: block; margin-bottom: 13px; color: var(--accent-deep); font-size: 12px; font-weight: 700; }
 .project-source-section + .modal-body .form-grid { gap-top: 0; }
+.source-mode-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.source-mode-choice button { display: flex; align-items: center; justify-content: center; gap: 7px; height: 37px; border: 1px solid #b9cfe1; border-radius: 7px; background: white; color: #637587; font-size: 9px; cursor: pointer; }
+.source-mode-choice button.active { border-color: #397fae; background: #eaf5fd; color: #236b9e; box-shadow: inset 0 0 0 1px #397fae; }
+.source-mode-choice svg, .repository-search svg { width: 14px; }
+.repository-search { display: flex; gap: 7px; }
+.repository-search input { min-width: 0; }
+.repository-search .secondary-button { flex: 0 0 auto; height: 36px; }
+.repository-picker { display: grid; max-height: 190px; overflow: auto; border: 1px solid #c9dce9; border-radius: 8px; background: white; }
+.repository-picker button { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 9px; min-height: 52px; padding: 8px 11px; border: 0; border-bottom: 1px solid #edf2f5; background: white; color: var(--ink); text-align: left; cursor: pointer; }
+.repository-picker button:last-child { border-bottom: 0; }
+.repository-picker button:hover, .repository-picker button.selected { background: #edf7fd; }
+.repository-picker button.selected { box-shadow: inset 3px 0 #3482b7; }
+.repository-picker svg { width: 15px; color: #4381a8; }
+.repository-picker strong, .repository-picker small { display: block; }
+.repository-picker strong { font-size: 9px; }
+.repository-picker small { max-width: 440px; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.repository-picker em { padding: 4px 6px; border-radius: 5px; background: #f1f4f1; color: #69756c; font-size: 8px; font-style: normal; }
+.repository-message { color: #39749b; font-size: 8px; }
+.code-host-guide { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 11px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid #cfe0d4; border-radius: 9px; background: #f4faf5; }
+.code-host-guide > svg { width: 19px; color: #2b7b4e; }
+.code-host-guide strong, .code-host-guide div span { display: block; }
+.code-host-guide strong { font-size: 10px; }
+.code-host-guide div span, .code-host-guide > span { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.code-host-guide > span { margin: 0; }
+.code-host-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.code-host-card { overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.code-host-card-head { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 10px; padding: 14px; border-bottom: 1px solid #e9eee9; }
+.provider-logo { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; background: #eef2ef; color: #45534a; }
+.provider-logo.gitlab { background: #fff0e9; color: #d95d2c; }
+.provider-logo.gitee { background: #fff0ef; color: #bf3c35; }
+.provider-logo svg { width: 18px; }
+.code-host-card-head strong, .code-host-card-head div span { display: block; }
+.code-host-card-head strong { font-size: 11px; }
+.code-host-card-head div span { margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.connection-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border-radius: 5px; background: #f0f2ef; color: #707a72; font-size: 8px; }
+.connection-pill.connected { background: #e9f7ed; color: #27764c; }
+.connection-pill.failed { background: #fff0ee; color: #ae4841; }
+.connection-pill svg { width: 12px; }
+.code-host-meta { display: grid; grid-template-columns: 1fr .65fr 1fr; gap: 10px; padding: 14px; }
+.code-host-meta span, .code-host-meta strong { display: block; }
+.code-host-meta span { color: var(--muted); font-size: 8px; }
+.code-host-meta strong { margin-top: 5px; font-size: 9px; }
+.code-host-error { display: flex; align-items: flex-start; gap: 6px; margin: -2px 14px 11px; padding: 8px 9px; border-radius: 6px; background: #fff3f1; color: #a44840; font-size: 8px; line-height: 1.5; }
+.code-host-error svg { flex: 0 0 auto; width: 13px; margin-top: 1px; }
+.code-host-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px; border-top: 1px solid #edf0ed; background: #fafcfa; }
+.code-host-card-foot small { color: var(--muted); font-size: 8px; }
+.code-host-card-foot > div { display: flex; gap: 5px; }
+.code-host-card-foot .secondary-button, .code-host-card-foot .icon-button { height: 29px; }
+.code-host-card-foot .icon-button { width: 29px; }
+.role-visibility-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.role-visibility-option { display: flex !important; align-items: center; gap: 9px; min-height: 52px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fafcfa; cursor: pointer; }
+.role-visibility-option input { width: 15px !important; height: 15px !important; flex: 0 0 auto; accent-color: #2d8758; }
+.role-visibility-option span { display: grid; gap: 3px; }
+.role-visibility-option strong { font-size: 9px; }
+.role-visibility-option small { color: var(--muted); font-size: 8px; font-weight: 400; }
+.code-host-empty { grid-column: 1 / -1; display: grid; justify-items: center; min-height: 260px; padding: 44px; border: 1px dashed #cad5cc; border-radius: 11px; background: #fafcfa; text-align: center; }
+.code-host-empty > svg { width: 30px; color: #6f8374; }
+.code-host-empty strong { margin-top: 12px; font-size: 12px; }
+.code-host-empty span { margin: 6px 0 17px; color: var(--muted); font-size: 9px; }
 .project-config-scroll { max-height: calc(100vh - 190px); overflow-y: auto; overscroll-behavior: contain; }
 .project-config-scroll .modal-body { max-height: none; overflow: visible; }
 .delete-confirm-body { display: grid; grid-template-columns: 42px 1fr; gap: 14px; align-items: start; }
@@ -746,6 +805,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 620px) { .settings-tabs { overflow: auto; } .settings-tabs button { flex: 0 0 auto; } }
 @media (max-width: 900px) { .audit-toolbar { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 620px) { .settings-form-columns, .audit-toolbar { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .code-host-grid { grid-template-columns: 1fr; } .code-host-guide { grid-template-columns: 28px 1fr; } .code-host-guide > span { grid-column: 2; } }
 
 @media (max-width: 900px) { .service-grid, .service-summary { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 620px) {

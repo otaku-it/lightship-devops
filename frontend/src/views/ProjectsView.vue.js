@@ -1,6 +1,6 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, CheckCircle2, Container, GitBranch, LoaderCircle, Pencil, Plus, Rocket, Server, ShieldCheck, Trash2, WandSparkles } from 'lucide-vue-next';
+import { Activity, AlertTriangle, CheckCircle2, Container, GitBranch, GitFork, LoaderCircle, Pencil, Plus, Rocket, Search, Server, ShieldCheck, Trash2, WandSparkles } from 'lucide-vue-next';
 import { api } from '../api/client';
 import ModalShell from '../components/ModalShell.vue';
 import { useAuthStore } from '../stores/auth';
@@ -16,6 +16,12 @@ const deleteError = ref('');
 const branches = ref([]);
 const branchesLoading = ref(false);
 const branchesMessage = ref('');
+const codeHosts = ref([]);
+const repositories = ref([]);
+const repositoriesLoading = ref(false);
+const repositorySearch = ref('');
+const repositoryMessage = ref('');
+const sourceMode = ref('connection');
 const saving = ref(false);
 const error = ref('');
 const route = useRoute();
@@ -23,7 +29,8 @@ const router = useRouter();
 const auth = useAuthStore();
 const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role));
 const canManage = computed(() => ['admin', 'release_manager'].includes(auth.role));
-const form = reactive({ name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' });
+const form = reactive({ name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '', code_host_connection_id: null });
+const selectedCodeHost = computed(() => codeHosts.value.find((item) => item.id === form.code_host_connection_id) || null);
 const visible = computed(() => projects.value.filter((item) => (filter.value === 'all' || (filter.value === 'docker' ? item.deployment_mode === 'docker' : filter.value === 'compose' ? item.deployment_mode === 'compose' : item.project_type === filter.value)) && `${item.name}${item.description}`.toLowerCase().includes(search.value.toLowerCase())));
 const templates = {
     java: { build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health' },
@@ -32,9 +39,10 @@ const templates = {
     fullstack: { build_command: '', artifact_pattern: '', health_path: '/health' },
 };
 async function load() {
-    const [projectResult, targetResult] = await Promise.all([api.get('/projects'), api.get('/targets')]);
+    const [projectResult, targetResult, codeHostResult] = await Promise.all([api.get('/projects'), api.get('/targets'), api.get('/code-hosts')]);
     projects.value = projectResult.data;
     targets.value = targetResult.data;
+    codeHosts.value = codeHostResult.data;
 }
 function applyRouteSearch() {
     search.value = String(route.query.search || '');
@@ -55,8 +63,12 @@ function openCreate() {
     if (!canOperate.value)
         return;
     editingId.value = null;
-    Object.assign(form, { name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' });
+    Object.assign(form, { name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '', code_host_connection_id: null });
     applyTemplate();
+    sourceMode.value = codeHosts.value.length ? 'connection' : 'manual';
+    repositories.value = [];
+    repositorySearch.value = '';
+    repositoryMessage.value = '';
     branches.value = [];
     branchesMessage.value = '';
     showCreate.value = true;
@@ -66,12 +78,16 @@ function openDockerCreate() {
     form.deployment_mode = 'docker';
 }
 function deploymentName(project) { return project.deployment_mode === 'compose' ? 'Compose' : project.deployment_mode === 'docker' ? 'Docker' : '文件'; }
-function deploymentDetail(project) { return project.deployment_mode === 'compose' ? `Compose: ${project.compose_file_path}` : project.deployment_mode === 'docker' ? `Dockerfile: ${project.dockerfile_path}` : project.credential_configured ? 'Git 凭证已配置' : '公开仓库 / 未配置凭证'; }
+function deploymentDetail(project) { return project.code_host_name ? `${project.code_host_name} · ${project.code_host_provider}` : project.deployment_mode === 'compose' ? `Compose: ${project.compose_file_path}` : project.deployment_mode === 'docker' ? `Dockerfile: ${project.dockerfile_path}` : project.credential_configured ? 'Git 凭证已配置' : '公开仓库 / 未配置凭证'; }
 function openEdit(project) {
     if (!canOperate.value)
         return;
     editingId.value = project.id;
     Object.assign(form, { ...project, git_token: '' });
+    sourceMode.value = project.code_host_connection_id ? 'connection' : 'manual';
+    repositories.value = [];
+    repositorySearch.value = '';
+    repositoryMessage.value = '';
     branches.value = [];
     branchesMessage.value = '';
     showCreate.value = true;
@@ -89,6 +105,7 @@ async function detectBranches() {
             repository_url: form.repository_url,
             git_username: form.git_username,
             git_token: form.git_token,
+            code_host_connection_id: form.code_host_connection_id,
         });
         branches.value = data.branches;
         if (data.default_branch)
@@ -102,6 +119,42 @@ async function detectBranches() {
     finally {
         branchesLoading.value = false;
     }
+}
+async function loadRepositories() {
+    repositories.value = [];
+    repositoryMessage.value = '';
+    if (!form.code_host_connection_id) {
+        repositoryMessage.value = '请先选择代码托管连接';
+        return;
+    }
+    repositoriesLoading.value = true;
+    try {
+        repositories.value = (await api.get(`/code-hosts/${form.code_host_connection_id}/repositories`, { params: { search: repositorySearch.value } })).data;
+        repositoryMessage.value = `已读取 ${repositories.value.length} 个仓库`;
+    }
+    catch (exception) {
+        repositoryMessage.value = exception.response?.data?.detail || '仓库读取失败，请先到代码托管页面测试连接';
+    }
+    finally {
+        repositoriesLoading.value = false;
+    }
+}
+function selectRepository(repository) {
+    form.repository_url = repository.clone_url;
+    form.default_branch = repository.default_branch || 'main';
+    if (!form.name.trim())
+        form.name = repository.name;
+    if (!form.description.trim() && repository.description)
+        form.description = repository.description;
+    repositoryMessage.value = `已选择 ${repository.full_name}`;
+    branches.value = [];
+}
+function changeSourceMode(mode) {
+    sourceMode.value = mode;
+    if (mode === 'manual')
+        form.code_host_connection_id = null;
+    repositories.value = [];
+    repositoryMessage.value = '';
 }
 async function saveProject(configureAfterSave = false) {
     error.value = '';
@@ -449,30 +502,183 @@ if (__VLS_ctx.showCreate) {
         value: "python",
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "form-field" },
+        ...{ class: "form-field full" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        placeholder: "https://git.example.com/team/project.git",
-    });
-    (__VLS_ctx.form.repository_url);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "form-field" },
+        ...{ class: "source-mode-choice" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        placeholder: "公开仓库可留空",
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.showCreate))
+                    return;
+                __VLS_ctx.changeSourceMode('connection');
+            } },
+        type: "button",
+        ...{ class: ({ active: __VLS_ctx.sourceMode === 'connection' }) },
     });
-    (__VLS_ctx.form.git_username);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "form-field" },
+    const __VLS_47 = {}.GitFork;
+    /** @type {[typeof __VLS_components.GitFork, ]} */ ;
+    // @ts-ignore
+    const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({}));
+    const __VLS_49 = __VLS_48({}, ...__VLS_functionalComponentArgsRest(__VLS_48));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.showCreate))
+                    return;
+                __VLS_ctx.changeSourceMode('manual');
+            } },
+        type: "button",
+        ...{ class: ({ active: __VLS_ctx.sourceMode === 'manual' }) },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
-        type: "password",
-        placeholder: (__VLS_ctx.editingId ? '留空表示使用已保存凭证' : '私有仓库填写'),
-    });
-    (__VLS_ctx.form.git_token);
+    const __VLS_51 = {}.GitBranch;
+    /** @type {[typeof __VLS_components.GitBranch, ]} */ ;
+    // @ts-ignore
+    const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
+    const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
+    if (__VLS_ctx.sourceMode === 'connection') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-field" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
+            ...{ onChange: (...[$event]) => {
+                    if (!(__VLS_ctx.showCreate))
+                        return;
+                    if (!(__VLS_ctx.sourceMode === 'connection'))
+                        return;
+                    __VLS_ctx.repositories = [];
+                    __VLS_ctx.repositoryMessage = '';
+                } },
+            value: (__VLS_ctx.form.code_host_connection_id),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+            value: (null),
+        });
+        for (const [item] of __VLS_getVForSourceType((__VLS_ctx.codeHosts))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+                key: (item.id),
+                value: (item.id),
+            });
+            (item.name);
+            (item.provider);
+            (item.status === 'connected' ? ' · 已连接' : ' · 待测试');
+        }
+        if (!__VLS_ctx.codeHosts.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+        }
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-field" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "repository-search" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            ...{ onKeyup: (__VLS_ctx.loadRepositories) },
+            placeholder: "项目名或仓库路径",
+        });
+        (__VLS_ctx.repositorySearch);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.loadRepositories) },
+            type: "button",
+            ...{ class: "secondary-button" },
+            disabled: (__VLS_ctx.repositoriesLoading || !__VLS_ctx.form.code_host_connection_id),
+        });
+        if (__VLS_ctx.repositoriesLoading) {
+            const __VLS_55 = {}.LoaderCircle;
+            /** @type {[typeof __VLS_components.LoaderCircle, ]} */ ;
+            // @ts-ignore
+            const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({
+                ...{ class: "spin" },
+            }));
+            const __VLS_57 = __VLS_56({
+                ...{ class: "spin" },
+            }, ...__VLS_functionalComponentArgsRest(__VLS_56));
+        }
+        else {
+            const __VLS_59 = {}.Search;
+            /** @type {[typeof __VLS_components.Search, ]} */ ;
+            // @ts-ignore
+            const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
+            const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
+        }
+        (__VLS_ctx.repositoriesLoading ? '读取中' : '读取仓库');
+        if (__VLS_ctx.repositories.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "repository-picker full" },
+            });
+            for (const [repository] of __VLS_getVForSourceType((__VLS_ctx.repositories))) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                    ...{ onClick: (...[$event]) => {
+                            if (!(__VLS_ctx.showCreate))
+                                return;
+                            if (!(__VLS_ctx.sourceMode === 'connection'))
+                                return;
+                            if (!(__VLS_ctx.repositories.length))
+                                return;
+                            __VLS_ctx.selectRepository(repository);
+                        } },
+                    key: (repository.id),
+                    type: "button",
+                    ...{ class: ({ selected: __VLS_ctx.form.repository_url === repository.clone_url }) },
+                });
+                const __VLS_63 = {}.GitFork;
+                /** @type {[typeof __VLS_components.GitFork, ]} */ ;
+                // @ts-ignore
+                const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({}));
+                const __VLS_65 = __VLS_64({}, ...__VLS_functionalComponentArgsRest(__VLS_64));
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+                (repository.full_name);
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+                (repository.description || repository.clone_url);
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.em, __VLS_intrinsicElements.em)({});
+                (repository.private ? '私有' : '公开');
+            }
+        }
+        if (__VLS_ctx.repositoryMessage) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
+                ...{ class: "repository-message full" },
+            });
+            (__VLS_ctx.repositoryMessage);
+        }
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-field full" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            placeholder: "请先读取并选择仓库，也可直接修正地址",
+        });
+        (__VLS_ctx.form.repository_url);
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-field full" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            placeholder: "https://git.example.com/team/project.git",
+        });
+        (__VLS_ctx.form.repository_url);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-field" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            placeholder: "公开仓库可留空",
+        });
+        (__VLS_ctx.form.git_username);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "form-field" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            type: "password",
+            placeholder: (__VLS_ctx.editingId ? '留空表示使用已保存凭证' : '私有仓库填写'),
+        });
+        (__VLS_ctx.form.git_token);
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full branch-field" },
     });
@@ -505,22 +711,22 @@ if (__VLS_ctx.showCreate) {
         disabled: (__VLS_ctx.branchesLoading || !__VLS_ctx.form.repository_url.trim()),
     });
     if (__VLS_ctx.branchesLoading) {
-        const __VLS_47 = {}.LoaderCircle;
+        const __VLS_67 = {}.LoaderCircle;
         /** @type {[typeof __VLS_components.LoaderCircle, ]} */ ;
         // @ts-ignore
-        const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({
+        const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({
             ...{ class: "spin" },
         }));
-        const __VLS_49 = __VLS_48({
+        const __VLS_69 = __VLS_68({
             ...{ class: "spin" },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_48));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_68));
     }
     else {
-        const __VLS_51 = {}.WandSparkles;
+        const __VLS_71 = {}.WandSparkles;
         /** @type {[typeof __VLS_components.WandSparkles, ]} */ ;
         // @ts-ignore
-        const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({}));
-        const __VLS_53 = __VLS_52({}, ...__VLS_functionalComponentArgsRest(__VLS_52));
+        const __VLS_72 = __VLS_asFunctionalComponent(__VLS_71, new __VLS_71({}));
+        const __VLS_73 = __VLS_72({}, ...__VLS_functionalComponentArgsRest(__VLS_72));
     }
     (__VLS_ctx.branchesLoading ? '正在读取...' : '识别远程分支');
     if (__VLS_ctx.branchesMessage) {
@@ -536,14 +742,16 @@ if (__VLS_ctx.showCreate) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "security-note full compact-security-note" },
     });
-    const __VLS_55 = {}.ShieldCheck;
+    const __VLS_75 = {}.ShieldCheck;
     /** @type {[typeof __VLS_components.ShieldCheck, ]} */ ;
     // @ts-ignore
-    const __VLS_56 = __VLS_asFunctionalComponent(__VLS_55, new __VLS_55({}));
-    const __VLS_57 = __VLS_56({}, ...__VLS_functionalComponentArgsRest(__VLS_56));
+    const __VLS_76 = __VLS_asFunctionalComponent(__VLS_75, new __VLS_75({}));
+    const __VLS_77 = __VLS_76({}, ...__VLS_functionalComponentArgsRest(__VLS_76));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.selectedCodeHost ? `使用连接：${__VLS_ctx.selectedCodeHost.name}` : 'Git 凭证加密保存');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    (__VLS_ctx.selectedCodeHost ? '仓库读取、分支识别和发布拉取将复用该连接的加密令牌。' : '凭证不会返回前端，也不会出现在发布日志中。');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "modal-body" },
     });
@@ -575,11 +783,11 @@ if (__VLS_ctx.showCreate) {
         type: "button",
         ...{ class: ({ active: __VLS_ctx.form.deployment_mode === 'docker' }) },
     });
-    const __VLS_59 = {}.Container;
+    const __VLS_79 = {}.Container;
     /** @type {[typeof __VLS_components.Container, ]} */ ;
     // @ts-ignore
-    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({}));
-    const __VLS_61 = __VLS_60({}, ...__VLS_functionalComponentArgsRest(__VLS_60));
+    const __VLS_80 = __VLS_asFunctionalComponent(__VLS_79, new __VLS_79({}));
+    const __VLS_81 = __VLS_80({}, ...__VLS_functionalComponentArgsRest(__VLS_80));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.showCreate))
@@ -589,11 +797,11 @@ if (__VLS_ctx.showCreate) {
         type: "button",
         ...{ class: ({ active: __VLS_ctx.form.deployment_mode === 'compose' }) },
     });
-    const __VLS_63 = {}.Container;
+    const __VLS_83 = {}.Container;
     /** @type {[typeof __VLS_components.Container, ]} */ ;
     // @ts-ignore
-    const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({}));
-    const __VLS_65 = __VLS_64({}, ...__VLS_functionalComponentArgsRest(__VLS_64));
+    const __VLS_84 = __VLS_asFunctionalComponent(__VLS_83, new __VLS_83({}));
+    const __VLS_85 = __VLS_84({}, ...__VLS_functionalComponentArgsRest(__VLS_84));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full" },
@@ -663,11 +871,11 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full docker-note" },
         });
-        const __VLS_67 = {}.Container;
+        const __VLS_87 = {}.Container;
         /** @type {[typeof __VLS_components.Container, ]} */ ;
         // @ts-ignore
-        const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({}));
-        const __VLS_69 = __VLS_68({}, ...__VLS_functionalComponentArgsRest(__VLS_68));
+        const __VLS_88 = __VLS_asFunctionalComponent(__VLS_87, new __VLS_87({}));
+        const __VLS_89 = __VLS_88({}, ...__VLS_functionalComponentArgsRest(__VLS_88));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -694,11 +902,11 @@ if (__VLS_ctx.showCreate) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "security-note full docker-note" },
         });
-        const __VLS_71 = {}.Container;
+        const __VLS_91 = {}.Container;
         /** @type {[typeof __VLS_components.Container, ]} */ ;
         // @ts-ignore
-        const __VLS_72 = __VLS_asFunctionalComponent(__VLS_71, new __VLS_71({}));
-        const __VLS_73 = __VLS_72({}, ...__VLS_functionalComponentArgsRest(__VLS_72));
+        const __VLS_92 = __VLS_asFunctionalComponent(__VLS_91, new __VLS_91({}));
+        const __VLS_93 = __VLS_92({}, ...__VLS_functionalComponentArgsRest(__VLS_92));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -742,51 +950,51 @@ if (__VLS_ctx.showCreate) {
         ...{ class: "primary-button" },
         disabled: (__VLS_ctx.saving),
     });
-    const __VLS_75 = {}.Server;
+    const __VLS_95 = {}.Server;
     /** @type {[typeof __VLS_components.Server, ]} */ ;
     // @ts-ignore
-    const __VLS_76 = __VLS_asFunctionalComponent(__VLS_75, new __VLS_75({}));
-    const __VLS_77 = __VLS_76({}, ...__VLS_functionalComponentArgsRest(__VLS_76));
+    const __VLS_96 = __VLS_asFunctionalComponent(__VLS_95, new __VLS_95({}));
+    const __VLS_97 = __VLS_96({}, ...__VLS_functionalComponentArgsRest(__VLS_96));
     (__VLS_ctx.saving ? '正在保存...' : '保存并配置服务器');
     var __VLS_42;
 }
 if (__VLS_ctx.deleteCandidate) {
     /** @type {[typeof ModalShell, typeof ModalShell, ]} */ ;
     // @ts-ignore
-    const __VLS_79 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
+    const __VLS_99 = __VLS_asFunctionalComponent(ModalShell, new ModalShell({
         ...{ 'onClose': {} },
         title: "删除项目",
         subtitle: "此操作不可恢复",
         size: "small",
     }));
-    const __VLS_80 = __VLS_79({
+    const __VLS_100 = __VLS_99({
         ...{ 'onClose': {} },
         title: "删除项目",
         subtitle: "此操作不可恢复",
         size: "small",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_79));
-    let __VLS_82;
-    let __VLS_83;
-    let __VLS_84;
-    const __VLS_85 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_99));
+    let __VLS_102;
+    let __VLS_103;
+    let __VLS_104;
+    const __VLS_105 = {
         onClose: (...[$event]) => {
             if (!(__VLS_ctx.deleteCandidate))
                 return;
             __VLS_ctx.deleteCandidate = null;
         }
     };
-    __VLS_81.slots.default;
+    __VLS_101.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "modal-body delete-confirm-body" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "delete-warning-icon" },
     });
-    const __VLS_86 = {}.AlertTriangle;
+    const __VLS_106 = {}.AlertTriangle;
     /** @type {[typeof __VLS_components.AlertTriangle, ]} */ ;
     // @ts-ignore
-    const __VLS_87 = __VLS_asFunctionalComponent(__VLS_86, new __VLS_86({}));
-    const __VLS_88 = __VLS_87({}, ...__VLS_functionalComponentArgsRest(__VLS_87));
+    const __VLS_107 = __VLS_asFunctionalComponent(__VLS_106, new __VLS_106({}));
+    const __VLS_108 = __VLS_107({}, ...__VLS_functionalComponentArgsRest(__VLS_107));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.deleteCandidate.name);
@@ -818,13 +1026,13 @@ if (__VLS_ctx.deleteCandidate) {
         ...{ class: "danger-button" },
         disabled: (__VLS_ctx.deleting),
     });
-    const __VLS_90 = {}.Trash2;
+    const __VLS_110 = {}.Trash2;
     /** @type {[typeof __VLS_components.Trash2, ]} */ ;
     // @ts-ignore
-    const __VLS_91 = __VLS_asFunctionalComponent(__VLS_90, new __VLS_90({}));
-    const __VLS_92 = __VLS_91({}, ...__VLS_functionalComponentArgsRest(__VLS_91));
+    const __VLS_111 = __VLS_asFunctionalComponent(__VLS_110, new __VLS_110({}));
+    const __VLS_112 = __VLS_111({}, ...__VLS_functionalComponentArgsRest(__VLS_111));
     (__VLS_ctx.deleting ? '正在删除...' : '确认删除项目');
-    var __VLS_81;
+    var __VLS_101;
 }
 /** @type {__VLS_StyleScopedClasses['content']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
@@ -878,6 +1086,24 @@ if (__VLS_ctx.deleteCandidate) {
 /** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['full']} */ ;
+/** @type {__VLS_StyleScopedClasses['source-mode-choice']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['repository-search']} */ ;
+/** @type {__VLS_StyleScopedClasses['secondary-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['spin']} */ ;
+/** @type {__VLS_StyleScopedClasses['repository-picker']} */ ;
+/** @type {__VLS_StyleScopedClasses['full']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected']} */ ;
+/** @type {__VLS_StyleScopedClasses['repository-message']} */ ;
+/** @type {__VLS_StyleScopedClasses['full']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['full']} */ ;
+/** @type {__VLS_StyleScopedClasses['form-field']} */ ;
+/** @type {__VLS_StyleScopedClasses['full']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['form-field']} */ ;
@@ -941,10 +1167,12 @@ const __VLS_self = (await import('vue')).defineComponent({
             CheckCircle2: CheckCircle2,
             Container: Container,
             GitBranch: GitBranch,
+            GitFork: GitFork,
             LoaderCircle: LoaderCircle,
             Pencil: Pencil,
             Plus: Plus,
             Rocket: Rocket,
+            Search: Search,
             Server: Server,
             ShieldCheck: ShieldCheck,
             Trash2: Trash2,
@@ -960,11 +1188,18 @@ const __VLS_self = (await import('vue')).defineComponent({
             branches: branches,
             branchesLoading: branchesLoading,
             branchesMessage: branchesMessage,
+            codeHosts: codeHosts,
+            repositories: repositories,
+            repositoriesLoading: repositoriesLoading,
+            repositorySearch: repositorySearch,
+            repositoryMessage: repositoryMessage,
+            sourceMode: sourceMode,
             saving: saving,
             error: error,
             auth: auth,
             canOperate: canOperate,
             form: form,
+            selectedCodeHost: selectedCodeHost,
             visible: visible,
             projectTargets: projectTargets,
             readyTargetCount: readyTargetCount,
@@ -978,6 +1213,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             deploymentDetail: deploymentDetail,
             openEdit: openEdit,
             detectBranches: detectBranches,
+            loadRepositories: loadRepositories,
+            selectRepository: selectRepository,
+            changeSourceMode: changeSourceMode,
             saveProject: saveProject,
             requestDelete: requestDelete,
             deleteProject: deleteProject,

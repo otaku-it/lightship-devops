@@ -40,6 +40,10 @@ const actionLabels: Record<string, string> = {
   'service.start': '启用服务',
   'service.restart': '重启服务',
   'platform.settings.update': '更新平台设置',
+  'code_host.create': '创建托管连接',
+  'code_host.update': '更新托管连接',
+  'code_host.test': '测试托管连接',
+  'code_host.delete': '删除托管连接',
 }
 const actionOptions = computed(() => Object.entries(actionLabels))
 

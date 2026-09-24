@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Bell, Box, ChevronRight, Folder, Gauge, History, Layers3, Plus, Search,
+  Bell, Box, ChevronRight, Folder, Gauge, GitFork, History, Layers3, Plus, Search,
   Server, Settings, ShipWheel, SlidersHorizontal, Activity,
 } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
@@ -17,6 +17,7 @@ const searchInput = ref<HTMLInputElement | null>(null)
 const searchProjects = ref<Project[]>([])
 const searchReleases = ref<Release[]>([])
 const searchLoading = ref(false)
+const codeHostVisible = ref(false)
 
 const nav = [
   { to: '/', name: 'dashboard', label: '总览', icon: Gauge },
@@ -27,7 +28,8 @@ const nav = [
 ]
 const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role))
 const canViewAudit = computed(() => ['admin', 'release_manager'].includes(auth.role))
-const titles: Record<string, string> = { dashboard: '发布总览', projects: '项目管理', releases: '发布记录', environments: '发布环境', services: '服务状态', settings: '平台设置', artifacts: '制品库', audit: '审计日志' }
+const canViewCodeHosts = computed(() => auth.role === 'admin' || codeHostVisible.value)
+const titles: Record<string, string> = { dashboard: '发布总览', projects: '项目管理', 'code-hosts': '代码托管', releases: '发布记录', environments: '发布环境', services: '服务状态', settings: '平台设置', artifacts: '制品库', audit: '审计日志' }
 const title = computed(() => titles[String(route.name)] || '轻舟')
 const searchResults = computed(() => {
   const keyword = search.value.trim().toLowerCase()
@@ -55,6 +57,9 @@ async function loadSearchData() {
     searchLoading.value = false
   }
 }
+async function loadCodeHostVisibility() {
+  try { codeHostVisible.value = (await api.get('/code-hosts')).data.length > 0 } catch { codeHostVisible.value = false }
+}
 function selectSearchResult(to: string) {
   search.value = ''
   router.push(to)
@@ -73,6 +78,7 @@ function handleSearchShortcut(event: KeyboardEvent) {
 onMounted(() => {
   auth.syncMe().catch(() => undefined)
   loadSearchData()
+  loadCodeHostVisibility()
   window.addEventListener('keydown', handleSearchShortcut)
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', handleSearchShortcut))
@@ -92,7 +98,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleSearchShortcut
         <button v-if="canViewAudit" class="nav-item" :class="{active: route.name === 'audit'}" @click="router.push('/audit')"><Layers3 /><span>审计日志</span></button>
       </nav>
       <div class="nav-label">系统</div>
-      <nav class="nav-list"><button class="nav-item" :class="{active: route.name === 'settings'}" @click="router.push('/settings')"><Settings /><span>平台设置</span></button></nav>
+      <nav class="nav-list"><button v-if="canViewCodeHosts" class="nav-item" :class="{active: route.name === 'code-hosts'}" @click="router.push('/code-hosts')"><GitFork /><span>代码托管</span></button><button class="nav-item" :class="{active: route.name === 'settings'}" @click="router.push('/settings')"><Settings /><span>平台设置</span></button></nav>
       <div class="sidebar-foot">
         <div class="runner-health"><div class="runner-health-head"><span>构建节点</span><span class="runner-health-value">5 / 6 在线</span></div><div class="runner-bars"><i v-for="(h,i) in [9,14,20,13,23,18,25,11,20,16,22,18]" :key="i" class="on" :style="{height:`${h}px`}" /></div></div>
         <button class="user-row user-button" @click="auth.logout"><div class="avatar">{{ auth.displayName.slice(0,2).toUpperCase() }}</div><div><strong>{{ auth.displayName }}</strong><span>{{ auth.role }} · 点击退出</span></div></button>

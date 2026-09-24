@@ -20,6 +20,36 @@ export interface Project {
   success_rate: number
   credential_configured: boolean
   git_username: string
+  code_host_connection_id: number | null
+  code_host_name: string
+  code_host_provider: string
+}
+
+export interface CodeHostConnection {
+  id: number
+  name: string
+  provider: 'github' | 'gitlab' | 'gitee'
+  base_url: string
+  username: string
+  token_configured: boolean
+  status: string
+  account_name: string
+  last_error: string
+  visible_roles: string[]
+  last_tested_at: string | null
+  created_at: string
+  project_count: number
+}
+
+export interface CodeHostRepository {
+  id: string
+  name: string
+  full_name: string
+  clone_url: string
+  web_url: string
+  default_branch: string
+  private: boolean
+  description: string
 }
 
 export interface Environment {

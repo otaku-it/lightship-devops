@@ -6,6 +6,15 @@ def run_schema_migrations(engine: Engine) -> None:
     """Apply the small additive migrations needed by the lightweight deployment."""
     inspector = inspect(engine)
     if "deployment_targets" not in inspector.get_table_names():
+        if "code_host_connections" in inspector.get_table_names():
+            code_host_columns = {column["name"] for column in inspector.get_columns("code_host_connections")}
+            if "last_error" not in code_host_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE code_host_connections ADD COLUMN last_error VARCHAR(500) NOT NULL DEFAULT ''"))
+            code_host_columns = {column["name"] for column in inspect(engine).get_columns("code_host_connections")}
+            if "visible_roles" not in code_host_columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE code_host_connections ADD COLUMN visible_roles VARCHAR(255) NOT NULL DEFAULT 'admin'"))
         return
     columns = {column["name"] for column in inspector.get_columns("deployment_targets")}
     if "project_id" not in columns:
@@ -27,8 +36,19 @@ def run_schema_migrations(engine: Engine) -> None:
         "docker_run_args": "VARCHAR(1000) NOT NULL DEFAULT ''",
         "compose_file_path": "VARCHAR(255) NOT NULL DEFAULT 'docker-compose.yml'",
         "compose_project_name": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "code_host_connection_id": "INTEGER NULL",
     }
     with engine.begin() as connection:
         for name, definition in additions.items():
             if name not in project_columns:
                 connection.execute(text(f"ALTER TABLE projects ADD COLUMN {name} {definition}"))
+    fresh_inspector = inspect(engine)
+    if "code_host_connections" in fresh_inspector.get_table_names():
+        code_host_columns = {column["name"] for column in fresh_inspector.get_columns("code_host_connections")}
+        if "last_error" not in code_host_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE code_host_connections ADD COLUMN last_error VARCHAR(500) NOT NULL DEFAULT ''"))
+        code_host_columns = {column["name"] for column in inspect(engine).get_columns("code_host_connections")}
+        if "visible_roles" not in code_host_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE code_host_connections ADD COLUMN visible_roles VARCHAR(255) NOT NULL DEFAULT 'admin'"))

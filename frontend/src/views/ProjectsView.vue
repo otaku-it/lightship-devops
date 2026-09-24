@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Activity, AlertTriangle, CheckCircle2, Container, GitBranch, LoaderCircle, Pencil, Plus, Rocket, Server, ShieldCheck, Trash2, WandSparkles } from 'lucide-vue-next'
+import { Activity, AlertTriangle, CheckCircle2, Container, GitBranch, GitFork, LoaderCircle, Pencil, Plus, Rocket, Search, Server, ShieldCheck, Trash2, WandSparkles } from 'lucide-vue-next'
 import { api } from '../api/client'
 import ModalShell from '../components/ModalShell.vue'
-import type { DeploymentTarget, Project } from '../types'
+import type { CodeHostConnection, CodeHostRepository, DeploymentTarget, Project } from '../types'
 import { useAuthStore } from '../stores/auth'
 
 const projects = ref<Project[]>([])
@@ -19,6 +19,12 @@ const deleteError = ref('')
 const branches = ref<string[]>([])
 const branchesLoading = ref(false)
 const branchesMessage = ref('')
+const codeHosts = ref<CodeHostConnection[]>([])
+const repositories = ref<CodeHostRepository[]>([])
+const repositoriesLoading = ref(false)
+const repositorySearch = ref('')
+const repositoryMessage = ref('')
+const sourceMode = ref<'connection' | 'manual'>('connection')
 const saving = ref(false)
 const error = ref('')
 const route = useRoute()
@@ -26,7 +32,8 @@ const router = useRouter()
 const auth = useAuthStore()
 const canOperate = computed(() => ['admin', 'release_manager', 'developer'].includes(auth.role))
 const canManage = computed(() => ['admin', 'release_manager'].includes(auth.role))
-const form = reactive({ name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '' })
+const form = reactive({ name: '', description: '', project_type: 'java', repository_url: '', default_branch: 'main', build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health', deployment_mode: 'file', dockerfile_path: 'Dockerfile', docker_image_name: '', docker_container_port: 8080, docker_run_args: '', compose_file_path: 'docker-compose.yml', compose_project_name: '', git_username: '', git_token: '', code_host_connection_id: null as number | null })
+const selectedCodeHost = computed(() => codeHosts.value.find((item) => item.id === form.code_host_connection_id) || null)
 
 const visible = computed(() => projects.value.filter((item) => (filter.value === 'all' || (filter.value === 'docker' ? item.deployment_mode === 'docker' : filter.value === 'compose' ? item.deployment_mode === 'compose' : item.project_type === filter.value)) && `${item.name}${item.description}`.toLowerCase().includes(search.value.toLowerCase())))
 const templates: Record<string, Pick<typeof form, 'build_command' | 'artifact_pattern' | 'health_path'>> = {
@@ -37,9 +44,10 @@ const templates: Record<string, Pick<typeof form, 'build_command' | 'artifact_pa
 }
 
 async function load() {
-  const [projectResult, targetResult] = await Promise.all([api.get('/projects'), api.get('/targets')])
+  const [projectResult, targetResult, codeHostResult] = await Promise.all([api.get('/projects'), api.get('/targets'), api.get('/code-hosts')])
   projects.value = projectResult.data
   targets.value = targetResult.data
+  codeHosts.value = codeHostResult.data
 }
 function applyRouteSearch() {
   search.value = String(route.query.search || '')
@@ -58,8 +66,12 @@ function applyTemplate() {
 function openCreate() {
   if (!canOperate.value) return
   editingId.value = null
-  Object.assign(form, { name:'', description:'', project_type:'java', repository_url:'', default_branch:'main', deployment_mode:'file', dockerfile_path:'Dockerfile', docker_image_name:'', docker_container_port:8080, docker_run_args:'', compose_file_path:'docker-compose.yml', compose_project_name:'', git_username:'', git_token:'' })
+  Object.assign(form, { name:'', description:'', project_type:'java', repository_url:'', default_branch:'main', deployment_mode:'file', dockerfile_path:'Dockerfile', docker_image_name:'', docker_container_port:8080, docker_run_args:'', compose_file_path:'docker-compose.yml', compose_project_name:'', git_username:'', git_token:'', code_host_connection_id: null })
   applyTemplate()
+  sourceMode.value = codeHosts.value.length ? 'connection' : 'manual'
+  repositories.value = []
+  repositorySearch.value = ''
+  repositoryMessage.value = ''
   branches.value = []
   branchesMessage.value = ''
   showCreate.value = true
@@ -69,11 +81,15 @@ function openDockerCreate() {
   form.deployment_mode = 'docker'
 }
 function deploymentName(project: Project) { return project.deployment_mode === 'compose' ? 'Compose' : project.deployment_mode === 'docker' ? 'Docker' : '文件' }
-function deploymentDetail(project: Project) { return project.deployment_mode === 'compose' ? `Compose: ${project.compose_file_path}` : project.deployment_mode === 'docker' ? `Dockerfile: ${project.dockerfile_path}` : project.credential_configured ? 'Git 凭证已配置' : '公开仓库 / 未配置凭证' }
+function deploymentDetail(project: Project) { return project.code_host_name ? `${project.code_host_name} · ${project.code_host_provider}` : project.deployment_mode === 'compose' ? `Compose: ${project.compose_file_path}` : project.deployment_mode === 'docker' ? `Dockerfile: ${project.dockerfile_path}` : project.credential_configured ? 'Git 凭证已配置' : '公开仓库 / 未配置凭证' }
 function openEdit(project: Project) {
   if (!canOperate.value) return
   editingId.value = project.id
   Object.assign(form, { ...project, git_token: '' })
+  sourceMode.value = project.code_host_connection_id ? 'connection' : 'manual'
+  repositories.value = []
+  repositorySearch.value = ''
+  repositoryMessage.value = ''
   branches.value = []
   branchesMessage.value = ''
   showCreate.value = true
@@ -91,6 +107,7 @@ async function detectBranches() {
       repository_url: form.repository_url,
       git_username: form.git_username,
       git_token: form.git_token,
+      code_host_connection_id: form.code_host_connection_id,
     })
     branches.value = data.branches
     if (data.default_branch) form.default_branch = data.default_branch
@@ -101,6 +118,31 @@ async function detectBranches() {
   } finally {
     branchesLoading.value = false
   }
+}
+async function loadRepositories() {
+  repositories.value = []
+  repositoryMessage.value = ''
+  if (!form.code_host_connection_id) { repositoryMessage.value = '请先选择代码托管连接'; return }
+  repositoriesLoading.value = true
+  try {
+    repositories.value = (await api.get(`/code-hosts/${form.code_host_connection_id}/repositories`, { params: { search: repositorySearch.value } })).data
+    repositoryMessage.value = `已读取 ${repositories.value.length} 个仓库`
+  } catch (exception: any) { repositoryMessage.value = exception.response?.data?.detail || '仓库读取失败，请先到代码托管页面测试连接' }
+  finally { repositoriesLoading.value = false }
+}
+function selectRepository(repository: CodeHostRepository) {
+  form.repository_url = repository.clone_url
+  form.default_branch = repository.default_branch || 'main'
+  if (!form.name.trim()) form.name = repository.name
+  if (!form.description.trim() && repository.description) form.description = repository.description
+  repositoryMessage.value = `已选择 ${repository.full_name}`
+  branches.value = []
+}
+function changeSourceMode(mode: 'connection' | 'manual') {
+  sourceMode.value = mode
+  if (mode === 'manual') form.code_host_connection_id = null
+  repositories.value = []
+  repositoryMessage.value = ''
 }
 async function saveProject(configureAfterSave = false) {
   error.value = ''
@@ -158,11 +200,21 @@ onMounted(async () => {
         <div class="project-source-grid">
           <div class="form-field full"><label>项目名称 *</label><input v-model="form.name" placeholder="例如 order-service" /></div>
           <div class="form-field"><label>工程类型</label><select v-model="form.project_type" @change="applyTemplate"><option value="fullstack">前后端一体化</option><option value="java">Java 后端</option><option value="frontend">前端工程</option><option value="python">Python 服务</option></select></div>
-          <div class="form-field"><label>Git 仓库 *</label><input v-model="form.repository_url" placeholder="https://git.example.com/team/project.git" /></div>
-          <div class="form-field"><label>Git 用户名（私有仓库）</label><input v-model="form.git_username" placeholder="公开仓库可留空" /></div>
-          <div class="form-field"><label>Git Token / 密码</label><input v-model="form.git_token" type="password" :placeholder="editingId?'留空表示使用已保存凭证':'私有仓库填写'" /></div>
+          <div class="form-field full"><label>仓库来源</label><div class="source-mode-choice"><button type="button" :class="{active:sourceMode==='connection'}" @click="changeSourceMode('connection')"><GitFork />从托管平台选择</button><button type="button" :class="{active:sourceMode==='manual'}" @click="changeSourceMode('manual')"><GitBranch />手动填写 Git 地址</button></div></div>
+          <template v-if="sourceMode==='connection'">
+            <div class="form-field"><label>代码托管连接 *</label><select v-model="form.code_host_connection_id" @change="repositories=[];repositoryMessage=''"><option :value="null">请选择连接</option><option v-for="item in codeHosts" :key="item.id" :value="item.id">{{ item.name }} · {{ item.provider }}{{ item.status==='connected'?' · 已连接':' · 待测试' }}</option></select><small v-if="!codeHosts.length">尚未配置连接，请先到“代码托管”页面新建。</small></div>
+            <div class="form-field"><label>搜索仓库</label><div class="repository-search"><input v-model="repositorySearch" placeholder="项目名或仓库路径" @keyup.enter="loadRepositories" /><button type="button" class="secondary-button" :disabled="repositoriesLoading || !form.code_host_connection_id" @click="loadRepositories"><LoaderCircle v-if="repositoriesLoading" class="spin" /><Search v-else />{{ repositoriesLoading?'读取中':'读取仓库' }}</button></div></div>
+            <div v-if="repositories.length" class="repository-picker full"><button v-for="repository in repositories" :key="repository.id" type="button" :class="{selected:form.repository_url===repository.clone_url}" @click="selectRepository(repository)"><GitFork /><span><strong>{{ repository.full_name }}</strong><small>{{ repository.description || repository.clone_url }}</small></span><em>{{ repository.private?'私有':'公开' }}</em></button></div>
+            <small v-if="repositoryMessage" class="repository-message full">{{ repositoryMessage }}</small>
+            <div class="form-field full"><label>已选仓库地址 *</label><input v-model="form.repository_url" placeholder="请先读取并选择仓库，也可直接修正地址" /></div>
+          </template>
+          <template v-else>
+            <div class="form-field full"><label>Git 仓库 *</label><input v-model="form.repository_url" placeholder="https://git.example.com/team/project.git" /></div>
+            <div class="form-field"><label>Git 用户名（私有仓库）</label><input v-model="form.git_username" placeholder="公开仓库可留空" /></div>
+            <div class="form-field"><label>Git Token / 密码</label><input v-model="form.git_token" type="password" :placeholder="editingId?'留空表示使用已保存凭证':'私有仓库填写'" /></div>
+          </template>
           <div class="form-field full branch-field"><label>默认分支 *</label><div class="branch-discovery-controls"><select v-if="branches.length" v-model="form.default_branch"><option v-for="branch in branches" :key="branch" :value="branch">{{ branch }}</option></select><input v-else v-model="form.default_branch" placeholder="例如 main；可手动填写" /><button type="button" class="secondary-button" :disabled="branchesLoading || !form.repository_url.trim()" @click="detectBranches"><LoaderCircle v-if="branchesLoading" class="spin" /><WandSparkles v-else />{{ branchesLoading ? '正在读取...' : '识别远程分支' }}</button></div><small v-if="branchesMessage" class="branch-message" :class="{error:branches.length===0 && !branchesLoading}">{{ branchesMessage }}</small><small v-else>识别失败时仍可手动填写分支名称。</small></div>
-          <div class="security-note full compact-security-note"><ShieldCheck /><div><strong>Git 凭证加密保存</strong><span>凭证不会返回前端，也不会出现在发布日志中。</span></div></div>
+          <div class="security-note full compact-security-note"><ShieldCheck /><div><strong>{{ selectedCodeHost ? `使用连接：${selectedCodeHost.name}` : 'Git 凭证加密保存' }}</strong><span>{{ selectedCodeHost ? '仓库读取、分支识别和发布拉取将复用该连接的加密令牌。' : '凭证不会返回前端，也不会出现在发布日志中。' }}</span></div></div>
         </div>
       </section>
       <div class="modal-body"><div class="form-grid"><div class="form-field full"><label>怎么部署</label><div class="deployment-mode-choice"><button type="button" :class="{active:form.deployment_mode==='file'}" @click="form.deployment_mode='file'">文件 / 进程</button><button type="button" :class="{active:form.deployment_mode==='docker'}" @click="form.deployment_mode='docker'"><Container />单个 Docker 容器</button><button type="button" :class="{active:form.deployment_mode==='compose'}" @click="form.deployment_mode='compose'"><Container />Docker Compose 多服务</button></div><small>工程同时包含前端、后端或其他服务时，建议选择 Docker Compose。</small></div><div class="form-field full"><label>项目说明</label><textarea v-model="form.description" /></div><template v-if="form.deployment_mode==='file'"><div class="form-field full"><label>构建命令</label><input v-model="form.build_command" /></div><div class="form-field"><label>构建产物路径（Glob）</label><input v-model="form.artifact_pattern" /></div><div class="form-field"><label>健康检查路径</label><input v-model="form.health_path" /></div></template><template v-else-if="form.deployment_mode==='docker'"><div class="form-field"><label>Dockerfile 路径 *</label><input v-model="form.dockerfile_path" placeholder="Dockerfile" /><small>相对于 Git 仓库根目录</small></div><div class="form-field"><label>容器内部端口 *</label><input v-model.number="form.docker_container_port" type="number" min="1" max="65535" /></div><div class="form-field full"><label>镜像名称（可选）</label><input v-model="form.docker_image_name" :placeholder="`lightship/${form.name || 'project'}`" /><small>留空由平台生成；每次发布自动追加版本标签</small></div><div class="form-field full"><label>docker run 附加参数（可选）</label><input v-model="form.docker_run_args" placeholder="--env-file /opt/app/app.env -v /data/app:/data" /><small>可配置环境变量、数据卷等；端口映射和重启策略由平台生成</small></div><div class="security-note full docker-note"><Container /><div><strong>镜像在目标服务器构建</strong><span>平台通过 SSH 上传构建上下文，执行 docker build 和 docker run；更新失败会恢复上一镜像。</span></div></div></template><template v-else><div class="form-field"><label>Compose 文件路径 *</label><input v-model="form.compose_file_path" placeholder="docker-compose.yml" /><small>相对于 Git 仓库根目录，例如 deploy/docker-compose.yml</small></div><div class="form-field"><label>Compose 项目名（可选）</label><input v-model="form.compose_project_name" :placeholder="`lightship-${form.name || 'project'}`" /><small>用于隔离容器、网络和数据卷；同一项目各版本应保持不变</small></div><div class="security-note full docker-note"><Container /><div><strong>整个工程作为一个发布单元</strong><span>平台会校验 Compose 配置、在目标服务器构建全部服务并执行 docker compose up。发布目录按版本保留，启动失败自动恢复上一版。</span></div></div></template><span v-if="error" class="error-text">{{ error }}</span></div></div>

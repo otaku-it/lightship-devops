@@ -4,6 +4,7 @@ from app.models.release import Release, ReleaseDeployment, ReleaseLog, ReleaseSt
 from app.models.user import User
 from app.models.audit import AuditLog
 from app.models.platform import PlatformSetting
+from app.models.code_host import CodeHostConnection
 
 __all__ = [
     "DeploymentTarget",
@@ -18,4 +19,5 @@ __all__ = [
     "User",
     "AuditLog",
     "PlatformSetting",
+    "CodeHostConnection",
 ]

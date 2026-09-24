@@ -19,6 +19,7 @@ class ProjectBase(BaseModel):
     docker_run_args: str = ""
     compose_file_path: str = "docker-compose.yml"
     compose_project_name: str = ""
+    code_host_connection_id: int | None = None
 
 
 class ProjectCreate(ProjectBase):
@@ -33,6 +34,8 @@ class ProjectRead(ProjectBase):
     success_rate: float = 0
     credential_configured: bool = False
     git_username: str = ""
+    code_host_name: str = ""
+    code_host_provider: str = ""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -42,6 +45,7 @@ class RepositoryBranchesRequest(BaseModel):
     repository_url: str = ""
     git_username: str = ""
     git_token: str = Field(default="", repr=False)
+    code_host_connection_id: int | None = None
 
 
 class RepositoryBranchesRead(BaseModel):
