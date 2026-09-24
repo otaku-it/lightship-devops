@@ -153,6 +153,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .project-glyph.java { background: #4d6fda; }
 .project-glyph.frontend { background: #29906a; }
 .project-glyph.python { background: #b17b27; }
+.project-glyph.php { background: #777bb4; }
 .project-glyph.docker { background: #2673c9; }
 .project-cell strong { display: block; overflow: hidden; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
 .project-cell span, .time-cell span { display: block; margin-top: 3px; color: var(--muted); font: 9px "JetBrains Mono", monospace; }

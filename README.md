@@ -12,7 +12,7 @@
 ## 已实现
 
 - JWT 登录与管理员初始化
-- Java、Frontend、Python 项目接入，支持文件部署与 Docker 容器部署
+- Java、Frontend、Python、PHP 项目接入，支持文件部署与 Docker 容器部署
 - GitHub、GitLab、Gitee 代码托管连接，支持公有云和私有化站点、连接测试、仓库选择与分支识别
 - 测试、预发、生产环境管理
 - 项目 → 发布环境 → 目标服务器三级发布范围建模
@@ -42,6 +42,8 @@ Docker 发布链路：
 3. 目标服务器执行 `docker build`，镜像标签格式为 `<镜像名>:<版本>-<发布单号>`。
 4. 平台用固定容器名替换旧容器，自动配置 `--restart unless-stopped` 和宿主机/容器端口映射。
 5. 健康检查失败时移除新容器，并使用上一镜像恢复容器。
+
+PHP 文件部署会在构建节点执行 Composer 依赖安装，默认发布整个应用目录（包含 `vendor`）；PHP-FPM、Nginx、MySQL、Redis 等组合工程建议使用 Docker Compose，并在仓库中提供 `docker-compose.yml`。
 
 ## 接入代码托管平台
 

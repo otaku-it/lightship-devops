@@ -24,6 +24,8 @@ router = APIRouter(prefix="/projects", tags=["项目"])
 
 
 def validate_project(payload: ProjectCreate) -> None:
+    if payload.project_type not in {"java", "frontend", "python", "php", "fullstack"}:
+        raise HTTPException(status_code=422, detail="工程类型只支持 Java、Frontend、Python、PHP 或前后端一体化")
     if payload.deployment_mode not in {"file", "docker", "compose"}:
         raise HTTPException(status_code=422, detail="部署方式只支持 file、docker 或 compose")
     if payload.deployment_mode == "docker":

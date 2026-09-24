@@ -18,6 +18,7 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
     bash ca-certificates curl default-jdk-headless git maven nodejs npm \
+    php-cli php-curl php-mbstring php-xml unzip composer \
     ; \
     rm -rf /var/lib/apt/lists/*; \
     npm config set registry https://registry.npmmirror.com; \

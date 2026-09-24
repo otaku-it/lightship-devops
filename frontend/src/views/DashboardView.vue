@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Check, Clock3, Folder, Rocket, Server, TrendingUp } from 'lucide-vue-next'
 import { api } from '../api/client'
@@ -12,14 +12,25 @@ const stats = ref<DashboardStats | null>(null)
 const targets = ref<DeploymentTarget[]>([])
 const projects = ref<Project[]>([])
 const loading = ref(true)
+const currentTime = ref(new Date())
+let greetingTimer: number | undefined
 const duration = computed(() => {
   const value = stats.value?.average_duration_seconds || 0
   return `${Math.floor(value / 60)}m ${String(value % 60).padStart(2, '0')}s`
 })
 const projectsWithTargets = computed(() => new Set(targets.value.map((item) => item.project_id)).size)
 const readyProjects = computed(() => new Set(targets.value.filter((item) => item.connection_type === 'ssh' && item.status === 'online' && item.credential_configured).map((item) => item.project_id)).size)
+const greeting = computed(() => {
+  const hour = currentTime.value.getHours()
+  if (hour < 6) return '夜深了'
+  if (hour < 12) return '早上好'
+  if (hour < 14) return '中午好'
+  if (hour < 18) return '下午好'
+  return '晚上好'
+})
 
 onMounted(async () => {
+  greetingTimer = window.setInterval(() => { currentTime.value = new Date() }, 60_000)
   try {
     const [statsResult, targetResult, projectResult] = await Promise.all([api.get('/dashboard'), api.get('/targets'), api.get('/projects')])
     stats.value = statsResult.data
@@ -27,11 +38,14 @@ onMounted(async () => {
     projects.value = projectResult.data
   } finally { loading.value = false }
 })
+onUnmounted(() => {
+  if (greetingTimer) window.clearInterval(greetingTimer)
+})
 </script>
 
 <template>
   <div class="content">
-    <div class="hero-row"><div><div class="eyebrow">Release window open</div><h1>上午好，交付航线一切正常</h1><p>从代码提交到目标服务器，每一步都有状态、日志和回滚依据。</p></div><div class="hero-actions"><button class="secondary-button" @click="router.push('/projects')"><Folder />查看项目</button><button class="primary-button" @click="router.push('/releases?create=1')"><Rocket />发起发布</button></div></div>
+    <div class="hero-row"><div><div class="eyebrow">Release window open</div><h1>{{ greeting }}，交付航线一切正常</h1><p>从代码提交到目标服务器，每一步都有状态、日志和回滚依据。</p></div><div class="hero-actions"><button class="secondary-button" @click="router.push('/projects')"><Folder />查看项目</button><button class="primary-button" @click="router.push('/releases?create=1')"><Rocket />发起发布</button></div></div>
     <section class="getting-started"><div class="getting-started-copy"><strong>最快发布路径</strong><span>按顺序完成 3 步即可真实发布</span></div><button :class="{done:projects.length}" @click="router.push('/projects')"><i><Check v-if="projects.length" /><span v-else>1</span></i><div><strong>接入项目</strong><small>{{ projects.length }} 个项目</small></div></button><button :class="{done:projectsWithTargets}" @click="router.push('/environments')"><i><Check v-if="projectsWithTargets" /><span v-else>2</span></i><div><strong>配置服务器</strong><small>{{ projectsWithTargets }} 个项目已配置</small></div></button><button :class="{done:readyProjects}" @click="router.push(readyProjects?'/releases?create=1':'/environments')"><i><Check v-if="readyProjects" /><span v-else>3</span></i><div><strong>测试并发布</strong><small>{{ readyProjects }} 个项目可发布</small></div></button></section>
     <div v-if="stats" class="metric-grid">
       <div class="metric-card" style="--tone:#168f52"><div class="metric-top"><span>今日发布</span><span class="metric-icon"><Rocket /></span></div><div class="metric-value">{{ stats.today_releases }}</div><div class="metric-foot">{{ stats.pending_releases }} 个任务正在执行或等待</div></div>

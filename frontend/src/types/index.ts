@@ -2,7 +2,7 @@ export interface Project {
   id: number
   name: string
   description: string
-  project_type: 'java' | 'frontend' | 'python' | 'fullstack'
+  project_type: 'java' | 'frontend' | 'python' | 'php' | 'fullstack'
   repository_url: string
   default_branch: string
   build_command: string

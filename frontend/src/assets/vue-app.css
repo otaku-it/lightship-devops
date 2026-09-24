@@ -6,6 +6,7 @@ button:disabled { opacity: .6; cursor: not-allowed; transform: none !important; 
 .project-glyph.java { background: #39715a; }
 .project-glyph.frontend { background: #4d6da5; }
 .project-glyph.python { background: #9b6a38; }
+.project-glyph.php { background: #777bb4; }
 .track-segment.failed { background: var(--red); }
 .loading-state, .list-empty { display: grid; place-items: center; min-height: 120px; color: var(--muted); font-size: 11px; }
 .inline-notice { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid #bfe1ca; border-radius: 8px; background: #f1faf4; color: #287149; font-size: 10px; }

@@ -1,4 +1,4 @@
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Check, Clock3, Folder, Rocket, Server, TrendingUp } from 'lucide-vue-next';
 import { api } from '../api/client';
@@ -9,13 +9,28 @@ const stats = ref(null);
 const targets = ref([]);
 const projects = ref([]);
 const loading = ref(true);
+const currentTime = ref(new Date());
+let greetingTimer;
 const duration = computed(() => {
     const value = stats.value?.average_duration_seconds || 0;
     return `${Math.floor(value / 60)}m ${String(value % 60).padStart(2, '0')}s`;
 });
 const projectsWithTargets = computed(() => new Set(targets.value.map((item) => item.project_id)).size);
 const readyProjects = computed(() => new Set(targets.value.filter((item) => item.connection_type === 'ssh' && item.status === 'online' && item.credential_configured).map((item) => item.project_id)).size);
+const greeting = computed(() => {
+    const hour = currentTime.value.getHours();
+    if (hour < 6)
+        return '夜深了';
+    if (hour < 12)
+        return '早上好';
+    if (hour < 14)
+        return '中午好';
+    if (hour < 18)
+        return '下午好';
+    return '晚上好';
+});
 onMounted(async () => {
+    greetingTimer = window.setInterval(() => { currentTime.value = new Date(); }, 60_000);
     try {
         const [statsResult, targetResult, projectResult] = await Promise.all([api.get('/dashboard'), api.get('/targets'), api.get('/projects')]);
         stats.value = statsResult.data;
@@ -25,6 +40,10 @@ onMounted(async () => {
     finally {
         loading.value = false;
     }
+});
+onUnmounted(() => {
+    if (greetingTimer)
+        window.clearInterval(greetingTimer);
 });
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
@@ -41,6 +60,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ class: "eyebrow" },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.h1, __VLS_intrinsicElements.h1)({});
+(__VLS_ctx.greeting);
 __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "hero-actions" },
@@ -461,6 +481,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             duration: duration,
             projectsWithTargets: projectsWithTargets,
             readyProjects: readyProjects,
+            greeting: greeting,
         };
     },
 });

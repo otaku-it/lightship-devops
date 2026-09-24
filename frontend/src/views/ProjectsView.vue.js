@@ -36,6 +36,7 @@ const templates = {
     java: { build_command: './mvnw clean package', artifact_pattern: 'target/*.jar', health_path: '/actuator/health' },
     frontend: { build_command: 'npm ci && npm run build', artifact_pattern: 'dist/**', health_path: '/' },
     python: { build_command: 'pip wheel . -w dist', artifact_pattern: 'dist/*.whl', health_path: '/health' },
+    php: { build_command: 'composer install --no-dev --prefer-dist --optimize-autoloader', artifact_pattern: '**', health_path: '/' },
     fullstack: { build_command: '', artifact_pattern: '', health_path: '/health' },
 };
 async function load() {
@@ -268,7 +269,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "filter-tabs" },
 });
-for (const [item] of __VLS_getVForSourceType(([{ k: 'all', n: '全部' }, { k: 'java', n: 'Java' }, { k: 'frontend', n: 'Frontend' }, { k: 'python', n: 'Python' }, { k: 'docker', n: 'Docker' }, { k: 'compose', n: 'Compose' }]))) {
+for (const [item] of __VLS_getVForSourceType(([{ k: 'all', n: '全部' }, { k: 'java', n: 'Java' }, { k: 'frontend', n: 'Frontend' }, { k: 'python', n: 'Python' }, { k: 'php', n: 'PHP' }, { k: 'docker', n: 'Docker' }, { k: 'compose', n: 'Compose' }]))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 __VLS_ctx.filter = item.k;
@@ -500,6 +501,9 @@ if (__VLS_ctx.showCreate) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
         value: "python",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+        value: "php",
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full" },
@@ -803,6 +807,7 @@ if (__VLS_ctx.showCreate) {
     const __VLS_84 = __VLS_asFunctionalComponent(__VLS_83, new __VLS_83({}));
     const __VLS_85 = __VLS_84({}, ...__VLS_functionalComponentArgsRest(__VLS_84));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    (__VLS_ctx.form.project_type === 'php' ? 'PHP-FPM + Nginx 或 PHP + 数据库等多服务工程，建议选择 Docker Compose。' : '工程同时包含前端、后端或其他服务时，建议选择 Docker Compose。');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "form-field full" },
     });
@@ -815,13 +820,21 @@ if (__VLS_ctx.showCreate) {
             ...{ class: "form-field full" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({});
+        (__VLS_ctx.form.project_type === 'php' ? '构建 / 依赖安装命令' : '构建命令');
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            placeholder: (__VLS_ctx.form.project_type === 'php' ? 'composer install --no-dev --prefer-dist --optimize-autoloader' : ''),
+        });
         (__VLS_ctx.form.build_command);
+        if (__VLS_ctx.form.project_type === 'php') {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+        }
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "form-field" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+            placeholder: (__VLS_ctx.form.project_type === 'php' ? '**（发布整个 PHP 应用）' : ''),
+        });
         (__VLS_ctx.form.artifact_pattern);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "form-field" },
